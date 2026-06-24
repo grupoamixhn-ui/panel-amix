@@ -494,6 +494,37 @@ async def list_logs(limit: int = 100) -> list[dict[str, Any]]:
     return []
 
 
+async def get_branding() -> dict[str, Any]:
+    if _DB is None:
+        return {"logo_data_uri": "", "brand_name": "", "tagline": ""}
+    doc = await _DB.config.find_one({"_id": "branding"}) or {}
+    return {
+        "logo_data_uri": doc.get("logo_data_uri", ""),
+        "brand_name": doc.get("brand_name", ""),
+        "tagline": doc.get("tagline", ""),
+    }
+
+
+async def save_branding(*, logo_data_uri: str | None = None, brand_name: str | None = None, tagline: str | None = None) -> dict[str, Any]:
+    if _DB is None:
+        raise RuntimeError("DB not initialized")
+    update: dict[str, Any] = {"updated_at": datetime.now(timezone.utc).isoformat()}
+    if logo_data_uri is not None:
+        update["logo_data_uri"] = logo_data_uri
+    if brand_name is not None:
+        update["brand_name"] = brand_name
+    if tagline is not None:
+        update["tagline"] = tagline
+    await _DB.config.update_one({"_id": "branding"}, {"$set": update}, upsert=True)
+    return await get_branding()
+
+
+async def clear_branding_logo() -> dict[str, Any]:
+    if _DB is not None:
+        await _DB.config.update_one({"_id": "branding"}, {"$set": {"logo_data_uri": ""}}, upsert=True)
+    return await get_branding()
+
+
 def _host_from_url(url: str) -> str:
     """Extract host (without scheme/port) from a Flussonic URL."""
     if not url:

@@ -1,5 +1,6 @@
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth";
+import { useBranding } from "../branding";
 import {
   Activity, LayoutDashboard, Radio, Users, BarChart3, Terminal, LogOut, Settings,
 } from "lucide-react";
@@ -15,19 +16,28 @@ const navItems = [
 
 export default function Layout({ children }) {
   const { user, logout } = useAuth();
+  const { logo_data_uri, brand_name, tagline } = useBranding();
   const nav = useNavigate();
+  const displayBrand = brand_name || "Flussonic";
+  const displayTagline = tagline || "NOC Console";
 
   return (
     <div className="min-h-screen flex relative z-10">
       <aside className="w-64 border-r border-[var(--border)] bg-[var(--surface)] flex flex-col">
         <div className="px-5 py-5 flex items-center gap-2.5 border-b border-[var(--border)]">
-          <div className="w-9 h-9 rounded-xl bg-[var(--primary)] flex items-center justify-center shadow-md">
-            <Activity className="w-4.5 h-4.5 text-white" strokeWidth={2.5} />
-          </div>
-          <div>
-            <div className="text-sm font-semibold tracking-tight">Flussonic</div>
-            <div className="text-[10px] mono uppercase tracking-widest text-[var(--muted)]">NOC Console</div>
-          </div>
+          {logo_data_uri ? (
+            <img src={logo_data_uri} alt={displayBrand} className="h-10 max-w-[180px] object-contain" data-testid="sidebar-logo" />
+          ) : (
+            <>
+              <div className="w-9 h-9 rounded-xl bg-[var(--primary)] flex items-center justify-center shadow-md">
+                <Activity className="w-4.5 h-4.5 text-white" strokeWidth={2.5} />
+              </div>
+              <div>
+                <div className="text-sm font-semibold tracking-tight">{displayBrand}</div>
+                <div className="text-[10px] mono uppercase tracking-widest text-[var(--muted)]">{displayTagline}</div>
+              </div>
+            </>
+          )}
         </div>
 
         <div className="px-3 pt-4 pb-2 label">Workspace</div>

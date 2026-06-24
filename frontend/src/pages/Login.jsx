@@ -1,12 +1,17 @@
 import { useState } from "react";
 import { useAuth } from "../auth";
+import { useBranding } from "../branding";
 import { Activity, ArrowRight } from "lucide-react";
 
 export default function Login() {
   const { login, error } = useAuth();
+  const { logo_data_uri, brand_name, tagline } = useBranding();
   const [email, setEmail] = useState("admin@flussonic.io");
   const [password, setPassword] = useState("admin123");
   const [busy, setBusy] = useState(false);
+
+  const displayBrand = brand_name || "Flussonic";
+  const displayTagline = tagline || "NOC Console";
 
   const submit = async (e) => {
     e.preventDefault();
@@ -17,17 +22,22 @@ export default function Login() {
 
   return (
     <div className="min-h-screen flex relative z-10" data-testid="login-page">
-      {/* Right form (primary, light) */}
       <div className="flex-1 flex items-center justify-center p-8 bg-[var(--bg)] order-2 lg:order-1">
         <form onSubmit={submit} className="w-full max-w-sm" data-testid="login-form">
-          <div className="flex items-center gap-2.5 mb-12">
-            <div className="w-9 h-9 rounded-xl bg-[var(--primary)] flex items-center justify-center shadow-md">
-              <Activity className="w-4.5 h-4.5 text-white" strokeWidth={2.5} />
-            </div>
-            <div>
-              <div className="text-sm font-semibold tracking-tight">Flussonic</div>
-              <div className="text-[10px] mono uppercase tracking-widest text-[var(--muted)]">NOC Console</div>
-            </div>
+          <div className="flex items-center gap-3 mb-12">
+            {logo_data_uri ? (
+              <img src={logo_data_uri} alt={displayBrand} className="h-14 max-w-[200px] object-contain" data-testid="login-logo" />
+            ) : (
+              <>
+                <div className="w-9 h-9 rounded-xl bg-[var(--primary)] flex items-center justify-center shadow-md">
+                  <Activity className="w-4.5 h-4.5 text-white" strokeWidth={2.5} />
+                </div>
+                <div>
+                  <div className="text-sm font-semibold tracking-tight">{displayBrand}</div>
+                  <div className="text-[10px] mono uppercase tracking-widest text-[var(--muted)]">{displayTagline}</div>
+                </div>
+              </>
+            )}
           </div>
 
           <h2 className="text-3xl font-semibold tracking-tight mb-1">Welcome back</h2>
@@ -76,7 +86,6 @@ export default function Login() {
         </form>
       </div>
 
-      {/* Left visual (dark accent) */}
       <div className="hidden lg:flex flex-1 relative overflow-hidden order-1 lg:order-2 bg-[#0B0F19]">
         <img
           src="https://images.pexels.com/photos/17323801/pexels-photo-17323801.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=900&w=1200"
@@ -98,23 +107,14 @@ export default function Login() {
               <span className="bg-gradient-to-r from-blue-300 to-cyan-200 bg-clip-text text-transparent">orchestrated precisely.</span>
             </h1>
             <p className="mt-6 text-white/70 max-w-md text-sm leading-relaxed">
-              Real-time visibility into every stream, session, byte and event flowing through your Flussonic Media Server.
+              Real-time visibility into every stream, session, byte and event flowing through your {displayBrand} Media Server.
             </p>
           </div>
 
           <div className="grid grid-cols-3 gap-6 mono text-xs">
-            <div>
-              <div className="text-[10px] uppercase tracking-widest text-white/50">Region</div>
-              <div className="mt-1.5">us-east-1</div>
-            </div>
-            <div>
-              <div className="text-[10px] uppercase tracking-widest text-white/50">API</div>
-              <div className="mt-1.5">v3.admin</div>
-            </div>
-            <div>
-              <div className="text-[10px] uppercase tracking-widest text-white/50">Build</div>
-              <div className="mt-1.5">24.03.demo</div>
-            </div>
+            <div><div className="text-[10px] uppercase tracking-widest text-white/50">Region</div><div className="mt-1.5">us-east-1</div></div>
+            <div><div className="text-[10px] uppercase tracking-widest text-white/50">API</div><div className="mt-1.5">v3.admin</div></div>
+            <div><div className="text-[10px] uppercase tracking-widest text-white/50">Build</div><div className="mt-1.5">24.03.demo</div></div>
           </div>
         </div>
       </div>

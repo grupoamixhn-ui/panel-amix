@@ -9,11 +9,13 @@ import logging
 from datetime import datetime, timezone, timedelta
 from typing import Any
 
+import base64
+
 import bcrypt
 import jwt
 from bson import ObjectId
 from bson.errors import InvalidId
-from fastapi import FastAPI, APIRouter, HTTPException, Request, Response, Depends
+from fastapi import FastAPI, APIRouter, HTTPException, Request, Response, Depends, UploadFile, File, Form
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, EmailStr, Field
 from starlette.middleware.cors import CORSMiddleware
@@ -247,6 +249,44 @@ async def config_test(body: FlussonicTestIn, user=Depends(get_current_user)):
 async def config_clear(user=Depends(get_current_user)):
     await flussonic.clear_config()
     return await flussonic.get_public_config()
+
+
+# ---------- Branding (logo, brand name) ----------
+@api.get("/branding")
+async def branding_get():
+    """Public — no auth so the login page can render the logo."""
+    return await flussonic.get_branding()
+
+
+_LOGO_MAX_BYTES = 1_000_000  # 1MB
+_LOGO_MIME = {"image/png", "image/jpeg", "image/jpg", "image/svg+xml", "image/webp", "image/gif"}
+
+
+@api.post("/branding")
+async def branding_post(
+    logo: UploadFile | None = File(default=None),
+    brand_name: str | None = Form(default=None),
+    tagline: str | None = Form(default=None),
+    user=Depends(get_current_user),
+):
+    data_uri: str | None = None
+    if logo is not None:
+        if logo.content_type not in _LOGO_MIME:
+            raise HTTPException(status_code=400, detail=f"Unsupported logo type: {logo.content_type}")
+        blob = await logo.read()
+        if len(blob) > _LOGO_MAX_BYTES:
+            raise HTTPException(status_code=413, detail="Logo file too large (max 1MB)")
+        data_uri = f"data:{logo.content_type};base64,{base64.b64encode(blob).decode()}"
+    return await flussonic.save_branding(
+        logo_data_uri=data_uri,
+        brand_name=brand_name,
+        tagline=tagline,
+    )
+
+
+@api.delete("/branding/logo")
+async def branding_logo_clear(user=Depends(get_current_user)):
+    return await flussonic.clear_branding_logo()
 
 
 @api.get("/")

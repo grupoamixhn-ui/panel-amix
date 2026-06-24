@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import api from "../api";
 import PageHeader from "../components/PageHeader";
+import BrandingSection from "../components/BrandingSection";
 import { Zap, Cable, CheckCircle2, XCircle, Loader2, Trash2 } from "lucide-react";
 
 export default function Settings() {
@@ -111,6 +112,8 @@ export default function Settings() {
       />
 
       <div className="p-8 space-y-6 max-w-3xl">
+        <BrandingSection />
+
         {/* Connection form */}
         <div className="cell p-6" data-testid="settings-connection">
           <div className="flex items-center gap-3 mb-5">

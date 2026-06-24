@@ -1,6 +1,7 @@
 import "./index.css";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider, useAuth } from "./auth";
+import { BrandingProvider } from "./branding";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import Streams from "./pages/Streams";
@@ -31,19 +32,21 @@ function LoginRoute() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <BrowserRouter>
-        <Routes>
-          <Route path="/login" element={<LoginRoute />} />
-          <Route path="/" element={<Guard><Dashboard /></Guard>} />
-          <Route path="/streams" element={<Guard><Streams /></Guard>} />
-          <Route path="/sessions" element={<Guard><Sessions /></Guard>} />
-          <Route path="/stats" element={<Guard><Stats /></Guard>} />
-          <Route path="/logs" element={<Guard><Logs /></Guard>} />
-          <Route path="/settings" element={<Guard><Settings /></Guard>} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </BrowserRouter>
-    </AuthProvider>
+    <BrandingProvider>
+      <AuthProvider>
+        <BrowserRouter>
+          <Routes>
+            <Route path="/login" element={<LoginRoute />} />
+            <Route path="/" element={<Guard><Dashboard /></Guard>} />
+            <Route path="/streams" element={<Guard><Streams /></Guard>} />
+            <Route path="/sessions" element={<Guard><Sessions /></Guard>} />
+            <Route path="/stats" element={<Guard><Stats /></Guard>} />
+            <Route path="/logs" element={<Guard><Logs /></Guard>} />
+            <Route path="/settings" element={<Guard><Settings /></Guard>} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </BrowserRouter>
+      </AuthProvider>
+    </BrandingProvider>
   );
 }
