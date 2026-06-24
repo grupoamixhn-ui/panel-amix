@@ -277,6 +277,7 @@ def _normalize_stream(name: str, data: dict[str, Any]) -> dict[str, Any]:
         "clients": int(clients),
         "uptime": int(uptime),
         "created_at": data.get("created_at") or "",
+        "publish_password": data.get("password") or data.get("publish_password") or "",
     }
 
 
@@ -365,7 +366,7 @@ async def get_stream(name: str) -> dict[str, Any] | None:
         return _normalize_stream(name, r.json())
 
 
-async def create_stream(name: str, url: str, title: str = "") -> dict[str, Any]:
+async def create_stream(name: str, url: str, title: str = "", publish_password: str | None = None) -> dict[str, Any]:
     if await _is_demo():
         _seed_mock()
         if name in _MOCK_STREAMS:
@@ -375,12 +376,15 @@ async def create_stream(name: str, url: str, title: str = "") -> dict[str, Any]:
             "status": "running", "alive": True,
             "bitrate": random.randint(2_000_000, 6_000_000), "clients": 0, "uptime": 0,
             "created_at": datetime.now(timezone.utc).isoformat(),
+            "publish_password": publish_password or "",
         }
         _log("info", f"Stream {name} created", name)
         return _MOCK_STREAMS[name]
     cfg = await _active_config()
     async with _make_client(cfg) as c:
-        body: dict[str, Any] = {"inputs": [{"url": url}], "title": title}
+        body: dict[str, Any] = {"name": name, "inputs": [{"url": url}], "title": title}
+        if publish_password:
+            body["password"] = publish_password
         r = await c.put(f"{cfg['api_path']}/streams/{name}", json=body)
         r.raise_for_status()
         return _normalize_stream(name, r.json() if r.content else body)
@@ -396,18 +400,34 @@ async def update_stream(name: str, payload: dict[str, Any]) -> dict[str, Any] | 
             s["inputs"] = [{"url": payload["url"]}]
         if "title" in payload:
             s["title"] = payload["title"]
+        if "publish_password" in payload:
+            s["publish_password"] = payload["publish_password"] or ""
         _log("info", f"Stream {name} updated", name)
         return s
     cfg = await _active_config()
-    body: dict[str, Any] = {}
-    if "url" in payload and payload["url"]:
-        body["inputs"] = [{"url": payload["url"]}]
-    if "title" in payload:
-        body["title"] = payload["title"]
     async with _make_client(cfg) as c:
-        r = await c.put(f"{cfg['api_path']}/streams/{name}", json=body)
+        # Flussonic v3 PUT replaces the full stream config. Fetch current, merge, re-PUT.
+        g = await c.get(f"{cfg['api_path']}/streams/{name}")
+        if g.status_code >= 400:
+            return None
+        current = g.json() or {}
+        # Build merged body from the on-disk config (avoids sending runtime stats back)
+        merged = dict(current.get("config_on_disk") or {})
+        merged.setdefault("name", name)
+        # Apply incoming changes
+        if "url" in payload and payload["url"]:
+            merged["inputs"] = [{"url": payload["url"]}]
+        if "title" in payload:
+            merged["title"] = payload["title"]
+        if "publish_password" in payload:
+            # Flussonic only clears the password when an explicit empty string is sent.
+            merged["password"] = payload["publish_password"] or ""
+        r = await c.put(f"{cfg['api_path']}/streams/{name}", json=merged)
         r.raise_for_status()
-        return _normalize_stream(name, r.json() if r.content else body)
+        try:
+            return _normalize_stream(name, r.json() if r.content else merged)
+        except Exception:  # noqa: BLE001
+            return _normalize_stream(name, merged)
 
 
 async def delete_stream(name: str) -> bool:
@@ -719,6 +739,17 @@ async def stream_outputs(name: str) -> dict[str, Any]:
     rtmp_p = cfg["rtmp_port"]
     srt_p = cfg["srt_port"]
     rtmp_host = f"{host}:{rtmp_p}" if rtmp_p not in (1935,) else host
+
+    # Fetch publish_password (if any) for this stream
+    publish_password = ""
+    try:
+        s = await get_stream(name)
+        if s:
+            publish_password = s.get("publish_password") or ""
+    except Exception:  # noqa: BLE001
+        publish_password = ""
+    pw_q = f"?password={publish_password}" if publish_password else ""
+
     return {
         "stream": name,
         "outputs": [
@@ -730,8 +761,21 @@ async def stream_outputs(name: str) -> dict[str, Any]:
             {"label": "RTSP", "protocol": "rtsp", "url": f"rtsp://{host}/{name}"},
         ],
         "publish": [
-            {"label": "RTMP publish (OBS / encoder)", "protocol": "rtmp", "url": f"rtmp://{rtmp_host}/{name}", "key": name},
-            {"label": "SRT publish", "protocol": "srt", "url": f"srt://{host}:{srt_p}?streamid=publish:{name}"},
+            {
+                "label": "RTMP publish (OBS / encoder)",
+                "protocol": "rtmp",
+                "url": f"rtmp://{rtmp_host}/{name}{pw_q}",
+                "key": f"{name}{pw_q}",
+                "server": f"rtmp://{rtmp_host}/",
+                "stream_key": f"{name}{pw_q}",
+            },
+            {
+                "label": "SRT publish",
+                "protocol": "srt",
+                "url": f"srt://{host}:{srt_p}?streamid=publish:{name}"
+                       + (f":{publish_password}" if publish_password else ""),
+            },
         ],
+        "publish_password": publish_password,
         "host": host,
     }

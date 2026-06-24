@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import api from "../api";
-import { X, Radio, Tv2, Cast, Camera, Film, Globe, Wifi, Pencil, Trash2 } from "lucide-react";
+import { X, Radio, Tv2, Cast, Camera, Film, Globe, Wifi, Pencil, Trash2, Lock, Eye, EyeOff } from "lucide-react";
 
 const TYPES = [
   { id: "srt-pull",     label: "SRT pull",     desc: "Connect to a remote SRT source",          icon: Cast },
@@ -155,6 +155,8 @@ export default function StreamWizard({ initial, onClose, onSaved, onDeleted }) {
   const [title, setTitle] = useState(initial?.title || "");
   const [typeId, setTypeId] = useState(initial ? "custom" : "srt-pull");
   const [fields, setFields] = useState(initial ? { url: initial?.inputs?.[0]?.url || "" } : { port: 9999 });
+  const [publishPassword, setPublishPassword] = useState(initial?.publish_password || "");
+  const [showPw, setShowPw] = useState(false);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -167,10 +169,11 @@ export default function StreamWizard({ initial, onClose, onSaved, onDeleted }) {
     setBusy(true); setErr("");
     try {
       if (!url) { setErr("Source URL is empty"); setBusy(false); return; }
+      const payload = { url, title, publish_password: publishPassword || "" };
       if (editing) {
-        await api.put(`/streams/${name}`, { url, title });
+        await api.put(`/streams/${name}`, payload);
       } else {
-        await api.post("/streams", { name, url, title });
+        await api.post("/streams", { name, ...payload });
       }
       onSaved(name);
     } catch (e2) {
@@ -265,6 +268,38 @@ export default function StreamWizard({ initial, onClose, onSaved, onDeleted }) {
               <code className="text-[11px] mono px-2 py-1 rounded bg-[var(--surface)] border border-[var(--border)] text-[var(--text)] truncate max-w-full" data-testid="stream-form-resolved-url">
                 {url || "—"}
               </code>
+            </div>
+          </div>
+
+          {/* Publish password (RTMP / SRT) */}
+          <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-4 py-3 mb-5">
+            <div className="flex items-center gap-2 mb-2">
+              <Lock className="w-3.5 h-3.5 text-[var(--muted)]" />
+              <div className="text-xs font-semibold">Publish password <span className="text-[var(--muted)] font-normal">· optional</span></div>
+            </div>
+            <p className="text-[11px] text-[var(--muted)] mb-2 leading-snug">
+              When set, Flussonic only accepts RTMP / SRT push from encoders that include this password.
+              OBS / encoder URL becomes <span className="mono">rtmp://host/{name || "STREAM"}?password=•••</span>.
+            </p>
+            <div className="relative">
+              <input
+                data-testid="stream-form-publish-password"
+                type={showPw ? "text" : "password"}
+                value={publishPassword}
+                onChange={(e) => setPublishPassword(e.target.value)}
+                placeholder="Leave empty to disable"
+                className="w-full px-3 py-2 text-sm mono pr-10"
+                autoComplete="new-password"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPw((v) => !v)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--muted)] hover:text-[var(--text)] p-1"
+                data-testid="stream-form-pw-toggle"
+                tabIndex={-1}
+              >
+                {showPw ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+              </button>
             </div>
           </div>
 

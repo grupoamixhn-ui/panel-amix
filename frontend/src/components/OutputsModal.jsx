@@ -90,6 +90,25 @@ export default function OutputsModal({ streamName, onClose }) {
                   <div className="space-y-2">
                     {data.publish.map((o) => <Url key={o.label} item={o} />)}
                   </div>
+
+                  {/* OBS-friendly split (Server + Stream Key) */}
+                  {data.publish[0]?.server && (
+                    <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-2" data-testid="obs-split">
+                      <Url item={{ protocol: "rtmp", label: "OBS · Server", url: data.publish[0].server }} />
+                      <Url item={{ protocol: "rtmp", label: "OBS · Stream Key", url: data.publish[0].stream_key }} />
+                    </div>
+                  )}
+
+                  {data.publish_password && (
+                    <div className="mt-3 px-3 py-2 rounded-lg bg-[var(--primary-soft)] border border-blue-100 text-[11px] text-[var(--text-2)] leading-relaxed flex items-start gap-2" data-testid="publish-password-info">
+                      <span className="font-bold mono text-[var(--primary)]">🔒</span>
+                      <div>
+                        This stream is <strong>password protected</strong>. Encoders must include{" "}
+                        <span className="mono">?password={data.publish_password}</span> in the URL (or as part of the OBS stream key).
+                      </div>
+                    </div>
+                  )}
+
                   <p className="text-[11px] text-[var(--muted)] mt-3 leading-relaxed">
                     For RTMP push from OBS: use the <span className="mono">rtmp://</span> URL as <strong>Server</strong> and the stream name as <strong>Stream Key</strong>.
                   </p>

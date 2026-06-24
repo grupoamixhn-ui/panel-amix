@@ -153,10 +153,12 @@ class StreamIn(BaseModel):
     name: str = Field(min_length=1, max_length=80)
     url: str = Field(min_length=1)
     title: str = ""
+    publish_password: str | None = None
 
 class StreamUpdateIn(BaseModel):
     url: str | None = None
     title: str | None = None
+    publish_password: str | None = None
 
 class ToggleIn(BaseModel):
     start: bool
@@ -394,7 +396,7 @@ async def streams_list(user=Depends(get_current_user)):
 @api.post("/streams")
 async def streams_create(body: StreamIn, user=Depends(get_current_user)):
     try:
-        return await flussonic.create_stream(body.name, body.url, body.title, body.dvr)
+        return await flussonic.create_stream(body.name, body.url, body.title, body.publish_password)
     except ValueError as e:
         raise HTTPException(status_code=409, detail=str(e))
 
