@@ -153,7 +153,6 @@ export default function StreamWizard({ initial, onClose, onSaved, onDeleted }) {
   const editing = !!initial?.name;
   const [name, setName] = useState(initial?.name || "");
   const [title, setTitle] = useState(initial?.title || "");
-  const [dvr, setDvr] = useState(!!initial?.dvr_enabled);
   const [typeId, setTypeId] = useState(initial ? "custom" : "srt-pull");
   const [fields, setFields] = useState(initial ? { url: initial?.inputs?.[0]?.url || "" } : { port: 9999 });
   const [err, setErr] = useState("");
@@ -169,9 +168,9 @@ export default function StreamWizard({ initial, onClose, onSaved, onDeleted }) {
     try {
       if (!url) { setErr("Source URL is empty"); setBusy(false); return; }
       if (editing) {
-        await api.put(`/streams/${name}`, { url, title, dvr });
+        await api.put(`/streams/${name}`, { url, title });
       } else {
-        await api.post("/streams", { name, url, title, dvr });
+        await api.post("/streams", { name, url, title });
       }
       onSaved(name);
     } catch (e2) {
@@ -268,11 +267,6 @@ export default function StreamWizard({ initial, onClose, onSaved, onDeleted }) {
               </code>
             </div>
           </div>
-
-          <label className="flex items-center gap-2.5 mb-5 text-sm cursor-pointer select-none" data-testid="stream-form-dvr">
-            <input type="checkbox" checked={dvr} onChange={(e) => setDvr(e.target.checked)} className="w-4 h-4 accent-[var(--primary)]" />
-            <span>Enable DVR archive</span>
-          </label>
 
           {/* Outputs preview */}
           <details open className="rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-4 py-3">

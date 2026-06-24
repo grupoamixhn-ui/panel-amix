@@ -91,7 +91,6 @@ export default function Streams() {
                   <th className="px-5 py-3 font-semibold">Viewers</th>
                   <th className="px-5 py-3 font-semibold">Bitrate</th>
                   <th className="px-5 py-3 font-semibold">Uptime</th>
-                  <th className="px-5 py-3 font-semibold">DVR</th>
                   <th className="px-5 py-3 font-semibold text-right">Actions</th>
                 </tr>
               </thead>
@@ -109,11 +108,6 @@ export default function Streams() {
                     <td className="px-5 py-3.5 mono font-semibold">{s.clients.toLocaleString()}</td>
                     <td className="px-5 py-3.5 mono">{fmtBitrate(s.bitrate)}</td>
                     <td className="px-5 py-3.5 mono text-[var(--muted)]">{fmtUptime(s.uptime)}</td>
-                    <td className="px-5 py-3.5 text-xs">
-                      {s.dvr_enabled
-                        ? <span className="pill pill-live">ON</span>
-                        : <span className="pill pill-off">OFF</span>}
-                    </td>
                     <td className="px-5 py-3.5 text-right">
                       <div className="inline-flex items-center gap-2">
                         <button
@@ -153,7 +147,7 @@ export default function Streams() {
                   </tr>
                 ))}
                 {filtered.length === 0 && (
-                  <tr><td colSpan={8} className="px-5 py-14 text-center text-[var(--muted)]">No streams found.</td></tr>
+                  <tr><td colSpan={7} className="px-5 py-14 text-center text-[var(--muted)]">No streams found.</td></tr>
                 )}
               </tbody>
             </table>

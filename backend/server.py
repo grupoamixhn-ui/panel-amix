@@ -94,12 +94,10 @@ class StreamIn(BaseModel):
     name: str = Field(min_length=1, max_length=80)
     url: str = Field(min_length=1)
     title: str = ""
-    dvr: bool = False
 
 class StreamUpdateIn(BaseModel):
     url: str | None = None
     title: str | None = None
-    dvr: bool | None = None
 
 class ToggleIn(BaseModel):
     start: bool

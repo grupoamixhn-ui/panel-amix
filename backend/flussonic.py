@@ -190,7 +190,6 @@ def _seed_mock() -> None:
             "bitrate": bitrate,
             "clients": clients,
             "uptime": random.randint(120, 86400) if status == "running" else 0,
-            "dvr_enabled": name.startswith("dvr") or name in ("news_hd", "sports_ch"),
             "created_at": (datetime.now(timezone.utc) - timedelta(days=random.randint(1, 90))).isoformat(),
         }
     levels = ["info", "warn", "error", "info", "info", "debug"]
@@ -245,7 +244,6 @@ def _normalize_stream(name: str, data: dict[str, Any]) -> dict[str, Any]:
         "bitrate": int(stats.get("bitrate") or data.get("bitrate") or 0),
         "clients": int(stats.get("clients") or data.get("clients") or 0),
         "uptime": int(stats.get("uptime") or data.get("uptime") or 0),
-        "dvr_enabled": bool((data.get("dvr") or {}).get("enabled") or data.get("dvr_enabled")),
         "created_at": data.get("created_at") or "",
     }
 
@@ -327,7 +325,7 @@ async def get_stream(name: str) -> dict[str, Any] | None:
         return _normalize_stream(name, r.json())
 
 
-async def create_stream(name: str, url: str, title: str = "", dvr: bool = False) -> dict[str, Any]:
+async def create_stream(name: str, url: str, title: str = "") -> dict[str, Any]:
     if await _is_demo():
         _seed_mock()
         if name in _MOCK_STREAMS:
@@ -336,15 +334,13 @@ async def create_stream(name: str, url: str, title: str = "", dvr: bool = False)
             "name": name, "title": title or name, "inputs": [{"url": url}],
             "status": "running", "alive": True,
             "bitrate": random.randint(2_000_000, 6_000_000), "clients": 0, "uptime": 0,
-            "dvr_enabled": dvr, "created_at": datetime.now(timezone.utc).isoformat(),
+            "created_at": datetime.now(timezone.utc).isoformat(),
         }
         _log("info", f"Stream {name} created", name)
         return _MOCK_STREAMS[name]
     cfg = await _active_config()
     async with _make_client(cfg) as c:
         body: dict[str, Any] = {"inputs": [{"url": url}], "title": title}
-        if dvr:
-            body["dvr"] = {"enabled": True}
         r = await c.put(f"{cfg['api_path']}/streams/{name}", json=body)
         r.raise_for_status()
         return _normalize_stream(name, r.json() if r.content else body)
@@ -360,8 +356,6 @@ async def update_stream(name: str, payload: dict[str, Any]) -> dict[str, Any] | 
             s["inputs"] = [{"url": payload["url"]}]
         if "title" in payload:
             s["title"] = payload["title"]
-        if "dvr" in payload:
-            s["dvr_enabled"] = bool(payload["dvr"])
         _log("info", f"Stream {name} updated", name)
         return s
     cfg = await _active_config()
@@ -370,8 +364,6 @@ async def update_stream(name: str, payload: dict[str, Any]) -> dict[str, Any] | 
         body["inputs"] = [{"url": payload["url"]}]
     if "title" in payload:
         body["title"] = payload["title"]
-    if "dvr" in payload:
-        body["dvr"] = {"enabled": bool(payload["dvr"])}
     async with _make_client(cfg) as c:
         r = await c.put(f"{cfg['api_path']}/streams/{name}", json=body)
         r.raise_for_status()
