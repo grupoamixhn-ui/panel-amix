@@ -3,7 +3,7 @@ import api, { fmtBitrate, fmtUptime } from "../api";
 import PageHeader from "../components/PageHeader";
 import StreamWizard from "../components/StreamWizard";
 import OutputsModal from "../components/OutputsModal";
-import { Plus, Play, Pause, Trash2, Share2, Search } from "lucide-react";
+import { Plus, Play, Pause, Trash2, Share2, Search, Pencil } from "lucide-react";
 
 function statusPill(s) {
   if (s.alive) return <span className="pill pill-live"><span className="dot dot-live" />Live</span>;
@@ -133,6 +133,14 @@ export default function Streams() {
                           {s.alive ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
                         </button>
                         <button
+                          onClick={() => { setEditing(s); setWizardOpen(true); }}
+                          className="btn-icon"
+                          title="Edit"
+                          data-testid={`stream-edit-icon-${s.name}`}
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                        <button
                           onClick={() => del(s.name)}
                           className="btn-icon btn-icon-danger"
                           title="Delete"
@@ -158,6 +166,7 @@ export default function Streams() {
           initial={editing}
           onClose={() => setWizardOpen(false)}
           onSaved={(name) => { setWizardOpen(false); load(); setOutputsFor(name); }}
+          onDeleted={() => { setWizardOpen(false); load(); }}
         />
       )}
 

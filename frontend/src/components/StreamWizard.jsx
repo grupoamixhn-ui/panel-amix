@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import api from "../api";
-import { X, Radio, Tv2, Cast, Camera, Film, Globe, Wifi, Pencil } from "lucide-react";
+import { X, Radio, Tv2, Cast, Camera, Film, Globe, Wifi, Pencil, Trash2 } from "lucide-react";
 
 const TYPES = [
   { id: "srt-pull",     label: "SRT pull",     desc: "Connect to a remote SRT source",          icon: Cast },
@@ -149,7 +149,7 @@ function OutputsPreview({ name }) {
 }
 
 // ---------- Main wizard component ----------
-export default function StreamWizard({ initial, onClose, onSaved }) {
+export default function StreamWizard({ initial, onClose, onSaved, onDeleted }) {
   const editing = !!initial?.name;
   const [name, setName] = useState(initial?.name || "");
   const [title, setTitle] = useState(initial?.title || "");
@@ -158,6 +158,7 @@ export default function StreamWizard({ initial, onClose, onSaved }) {
   const [fields, setFields] = useState(initial ? { url: initial?.inputs?.[0]?.url || "" } : { port: 9999 });
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const url = useMemo(() => build(typeId, fields), [typeId, fields]);
   const setF = (k, v) => setFields((s) => ({ ...s, [k]: v }));
@@ -177,6 +178,19 @@ export default function StreamWizard({ initial, onClose, onSaved }) {
       const m = e2.response?.data?.detail;
       setErr(typeof m === "string" ? m : "Save failed");
     } finally { setBusy(false); }
+  };
+
+  const remove = async () => {
+    if (!window.confirm(`Delete stream "${name}"? This cannot be undone.`)) return;
+    setDeleting(true); setErr("");
+    try {
+      await api.delete(`/streams/${name}`);
+      onDeleted?.(name);
+    } catch (e2) {
+      const m = e2.response?.data?.detail;
+      setErr(typeof m === "string" ? m : "Delete failed");
+      setDeleting(false);
+    }
   };
 
   return (
@@ -269,11 +283,26 @@ export default function StreamWizard({ initial, onClose, onSaved }) {
           {err && <div className="mt-4 px-3 py-2 rounded-lg bg-[var(--error-soft)] border border-[#FECACA] text-[var(--error)] text-xs">{err}</div>}
         </div>
 
-        <div className="px-7 py-4 border-t border-[var(--border)] flex gap-3 justify-end bg-[var(--surface-2)] rounded-b-2xl">
-          <button type="button" onClick={onClose} className="btn btn-ghost" data-testid="stream-form-cancel">Cancel</button>
-          <button type="submit" disabled={busy} className="btn btn-primary" data-testid="stream-form-submit">
-            {busy ? "Saving…" : editing ? "Save changes" : "Create stream"}
-          </button>
+        <div className="px-7 py-4 border-t border-[var(--border)] flex gap-3 justify-between items-center bg-[var(--surface-2)] rounded-b-2xl">
+          <div>
+            {editing && (
+              <button
+                type="button"
+                onClick={remove}
+                disabled={deleting || busy}
+                className="btn btn-ghost text-[var(--error)] hover:border-[var(--error)] disabled:opacity-50"
+                data-testid="stream-form-delete"
+              >
+                <Trash2 className="w-3.5 h-3.5" /> {deleting ? "Deleting…" : "Delete stream"}
+              </button>
+            )}
+          </div>
+          <div className="flex gap-3">
+            <button type="button" onClick={onClose} className="btn btn-ghost" data-testid="stream-form-cancel">Cancel</button>
+            <button type="submit" disabled={busy || deleting} className="btn btn-primary" data-testid="stream-form-submit">
+              {busy ? "Saving…" : editing ? "Save changes" : "Create stream"}
+            </button>
+          </div>
         </div>
       </form>
     </div>
