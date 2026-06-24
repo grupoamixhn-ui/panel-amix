@@ -108,12 +108,14 @@ class FlussonicConfigIn(BaseModel):
     user: str = ""
     password: str | None = None  # None = keep existing
     demo_mode: bool = False
+    api_path: str | None = None
 
 
 class FlussonicTestIn(BaseModel):
     url: str
     user: str = ""
     password: str = ""
+    api_path: str | None = None
 
 
 # ---------- Auth endpoints ----------
@@ -212,20 +214,22 @@ async def config_get(user=Depends(get_current_user)):
 @api.put("/config/flussonic")
 async def config_put(body: FlussonicConfigIn, user=Depends(get_current_user)):
     await flussonic.save_config(
-        url=body.url, user=body.user, password=body.password, demo_mode=body.demo_mode,
+        url=body.url, user=body.user, password=body.password,
+        demo_mode=body.demo_mode, api_path=body.api_path,
     )
     return await flussonic.get_public_config()
 
 
 @api.post("/config/flussonic/test")
 async def config_test(body: FlussonicTestIn, user=Depends(get_current_user)):
-    # If password is empty, fall back to stored password (so "Test" works without re-typing)
     pwd = body.password
     if not pwd:
         cur = await flussonic._active_config()  # noqa: SLF001
         if body.url.rstrip("/") == cur["url"].rstrip("/") and body.user == cur.get("user", ""):
             pwd = cur.get("password", "")
-    return await flussonic.test_connection(url=body.url, user=body.user, password=pwd or "")
+    return await flussonic.test_connection(
+        url=body.url, user=body.user, password=pwd or "", api_path=body.api_path or None,
+    )
 
 
 @api.post("/config/flussonic/clear")

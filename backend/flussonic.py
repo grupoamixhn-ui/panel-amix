@@ -50,6 +50,7 @@ async def _active_config() -> dict[str, Any]:
         "user": cfg.get("user", os.environ.get("FLUSSONIC_USER", "")),
         "password": cfg.get("password", os.environ.get("FLUSSONIC_PASS", "")),
         "demo_mode": cfg["demo_mode"] if "demo_mode" in cfg else env_demo,
+        "api_path": (cfg.get("api_path") or os.environ.get("FLUSSONIC_API_PATH") or "/streamer/api/v3").rstrip("/"),
     }
 
 
@@ -61,10 +62,11 @@ async def get_public_config() -> dict[str, Any]:
         "user": c["user"],
         "demo_mode": c["demo_mode"],
         "has_password": bool(c["password"]),
+        "api_path": c["api_path"],
     }
 
 
-async def save_config(*, url: str, user: str, password: str | None, demo_mode: bool) -> None:
+async def save_config(*, url: str, user: str, password: str | None, demo_mode: bool, api_path: str | None = None) -> None:
     if _DB is None:
         raise RuntimeError("DB not initialized")
     update: dict[str, Any] = {
@@ -73,7 +75,8 @@ async def save_config(*, url: str, user: str, password: str | None, demo_mode: b
         "demo_mode": bool(demo_mode),
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
-    # Only overwrite password when caller explicitly provided one (empty string clears it)
+    if api_path is not None:
+        update["api_path"] = ("/" + api_path.strip().strip("/")) if api_path else "/streamer/api/v3"
     if password is not None:
         update["password"] = password
     await _DB.config.update_one(
@@ -100,23 +103,41 @@ async def _is_demo() -> bool:
     return bool(cfg["demo_mode"]) or not cfg["url"]
 
 
-async def test_connection(*, url: str, user: str, password: str) -> dict[str, Any]:
-    """Probe a Flussonic instance without persisting config."""
+async def test_connection(*, url: str, user: str, password: str, api_path: str | None = None) -> dict[str, Any]:
+    """Probe a Flussonic instance. Tries multiple known API paths if api_path not provided."""
     if not url:
         return {"ok": False, "error": "URL is required"}
     auth = (user, password) if user else None
-    try:
-        async with httpx.AsyncClient(base_url=url.rstrip("/"), auth=auth, timeout=8.0) as c:
-            r = await c.get("/streamer/api/v3/server")
+    base = url.rstrip("/")
+    candidates = (
+        [api_path.rstrip("/")] if api_path
+        else ["/streamer/api/v3", "/flussonic/api", "/api/v3", "/erlyvideo/api"]
+    )
+    tried: list[str] = []
+    async with httpx.AsyncClient(base_url=base, auth=auth, timeout=8.0, follow_redirects=True) as c:
+        for p in candidates:
+            endpoint = f"{p}/server"
+            tried.append(endpoint)
+            try:
+                r = await c.get(endpoint)
+            except httpx.HTTPError as e:
+                return {"ok": False, "error": f"{type(e).__name__}: {e}", "tried": tried}
             if r.status_code in (401, 403):
-                return {"ok": False, "error": f"Auth failed ({r.status_code})"}
-            r.raise_for_status()
-            data = r.json() if r.headers.get("content-type", "").startswith("application/json") else {}
-            return {"ok": True, "version": data.get("version", "unknown"), "raw": data}
-    except httpx.HTTPError as e:
-        return {"ok": False, "error": str(e)}
-    except Exception as e:  # noqa: BLE001
-        return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+                return {"ok": False, "error": f"Auth failed ({r.status_code}) at {endpoint}", "tried": tried}
+            if r.status_code == 404:
+                continue  # try next candidate
+            if r.status_code >= 400:
+                return {"ok": False, "error": f"HTTP {r.status_code} at {endpoint}", "tried": tried}
+            try:
+                data = r.json() if r.headers.get("content-type", "").startswith("application/json") else {}
+            except Exception:  # noqa: BLE001
+                data = {}
+            return {"ok": True, "version": data.get("version", "unknown"), "api_path": p, "tried": tried, "raw": data}
+    return {
+        "ok": False,
+        "error": "API not found at any known path. Set a custom API base path or verify this is a Flussonic server.",
+        "tried": tried,
+    }
 
 
 # ---------- Mock data ----------
@@ -226,7 +247,7 @@ async def get_server_info() -> dict[str, Any]:
     cfg = await _active_config()
     async with _make_client(cfg) as c:
         try:
-            r = await c.get("/streamer/api/v3/server")
+            r = await c.get(f"{cfg['api_path']}/server")
             r.raise_for_status()
             data = r.json()
         except httpx.HTTPError as e:
@@ -235,7 +256,7 @@ async def get_server_info() -> dict[str, Any]:
                     "cpu": 0, "memory": 0, "uptime": 0}
         # Try to compute aggregates from /streams if /server is sparse
         try:
-            s2 = await c.get("/streamer/api/v3/streams")
+            s2 = await c.get(f"{cfg['api_path']}/streams")
             streams = s2.json() if s2.status_code == 200 else []
             if isinstance(streams, dict):
                 streams = streams.get("streams", [])
@@ -264,7 +285,7 @@ async def list_streams() -> list[dict[str, Any]]:
         return list(_MOCK_STREAMS.values())
     cfg = await _active_config()
     async with _make_client(cfg) as c:
-        r = await c.get("/streamer/api/v3/streams")
+        r = await c.get(f"{cfg['api_path']}/streams")
         r.raise_for_status()
         data = r.json()
         if isinstance(data, dict):
@@ -278,7 +299,7 @@ async def get_stream(name: str) -> dict[str, Any] | None:
         return _MOCK_STREAMS.get(name)
     cfg = await _active_config()
     async with _make_client(cfg) as c:
-        r = await c.get(f"/streamer/api/v3/streams/{name}")
+        r = await c.get(f"{cfg['api_path']}/streams/{name}")
         if r.status_code == 404:
             return None
         r.raise_for_status()
@@ -303,7 +324,7 @@ async def create_stream(name: str, url: str, title: str = "", dvr: bool = False)
         body: dict[str, Any] = {"inputs": [{"url": url}], "title": title}
         if dvr:
             body["dvr"] = {"enabled": True}
-        r = await c.put(f"/streamer/api/v3/streams/{name}", json=body)
+        r = await c.put(f"{cfg['api_path']}/streams/{name}", json=body)
         r.raise_for_status()
         return _normalize_stream(name, r.json() if r.content else body)
 
@@ -331,7 +352,7 @@ async def update_stream(name: str, payload: dict[str, Any]) -> dict[str, Any] | 
     if "dvr" in payload:
         body["dvr"] = {"enabled": bool(payload["dvr"])}
     async with _make_client(cfg) as c:
-        r = await c.put(f"/streamer/api/v3/streams/{name}", json=body)
+        r = await c.put(f"{cfg['api_path']}/streams/{name}", json=body)
         r.raise_for_status()
         return _normalize_stream(name, r.json() if r.content else body)
 
@@ -346,7 +367,7 @@ async def delete_stream(name: str) -> bool:
         return False
     cfg = await _active_config()
     async with _make_client(cfg) as c:
-        r = await c.delete(f"/streamer/api/v3/streams/{name}")
+        r = await c.delete(f"{cfg['api_path']}/streams/{name}")
         return r.status_code in (200, 204)
 
 
@@ -365,10 +386,10 @@ async def toggle_stream(name: str, start: bool) -> dict[str, Any] | None:
     cfg = await _active_config()
     async with _make_client(cfg) as c:
         path = "restart" if start else "stop"
-        r = await c.post(f"/streamer/api/v3/streams/{name}/{path}")
+        r = await c.post(f"{cfg['api_path']}/streams/{name}/{path}")
         r.raise_for_status()
         # Re-fetch to return up-to-date data
-        g = await c.get(f"/streamer/api/v3/streams/{name}")
+        g = await c.get(f"{cfg['api_path']}/streams/{name}")
         return _normalize_stream(name, g.json()) if g.status_code == 200 else None
 
 
@@ -398,7 +419,7 @@ async def list_sessions() -> list[dict[str, Any]]:
         return sessions
     cfg = await _active_config()
     async with _make_client(cfg) as c:
-        r = await c.get("/streamer/api/v3/sessions")
+        r = await c.get(f"{cfg['api_path']}/sessions")
         r.raise_for_status()
         data = r.json()
         if isinstance(data, dict):

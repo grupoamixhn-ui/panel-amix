@@ -6,7 +6,7 @@ import { Zap, Cable, CheckCircle2, XCircle, Loader2, Trash2 } from "lucide-react
 export default function Settings() {
   const [info, setInfo] = useState(null);
   const [cfg, setCfg] = useState(null);          // current persisted config
-  const [form, setForm] = useState({ url: "", user: "", password: "", demo_mode: false });
+  const [form, setForm] = useState({ url: "", user: "", password: "", demo_mode: false, api_path: "" });
   const [touched, setTouched] = useState(false); // whether the user edited the form
   const [testing, setTesting] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -24,8 +24,9 @@ export default function Settings() {
       setForm({
         url: c.data.url || "",
         user: c.data.user || "",
-        password: "", // never pre-fill the password
+        password: "",
         demo_mode: !!c.data.demo_mode,
+        api_path: c.data.api_path || "",
       });
     }
   };
@@ -39,8 +40,14 @@ export default function Settings() {
     try {
       const { data } = await api.post("/config/flussonic/test", {
         url: form.url, user: form.user, password: form.password,
+        api_path: form.api_path || null,
       });
       setTestResult(data);
+      // If the probe discovered the working path, copy it into the form so Save persists it
+      if (data?.ok && data.api_path && data.api_path !== form.api_path) {
+        setForm((f) => ({ ...f, api_path: data.api_path }));
+        setTouched(true);
+      }
     } catch (e) {
       setTestResult({ ok: false, error: e.response?.data?.detail || e.message });
     } finally { setTesting(false); }
@@ -53,8 +60,7 @@ export default function Settings() {
         url: form.url,
         user: form.user,
         demo_mode: form.demo_mode,
-        // If the user left password empty AND we are editing an existing config with stored password,
-        // send `null` to keep the existing one. If they cleared it intentionally with a clean URL, send "".
+        api_path: form.api_path || null,
         password: form.password === "" && cfg?.has_password ? null : form.password,
       };
       await api.put("/config/flussonic", body);
@@ -72,7 +78,7 @@ export default function Settings() {
     if (!window.confirm("Clear stored Flussonic config and return to DEMO mode?")) return;
     await api.post("/config/flussonic/clear");
     await loadAll();
-    setForm({ url: "", user: "", password: "", demo_mode: false });
+    setForm({ url: "", user: "", password: "", demo_mode: false, api_path: "" });
     setTestResult(null);
     setTouched(false);
   };
@@ -162,6 +168,27 @@ export default function Settings() {
             </span>
           </label>
 
+          <details className="mt-5 group">
+            <summary className="text-xs font-medium text-[var(--text-2)] cursor-pointer select-none hover:text-[var(--primary)]">
+              Advanced · API base path
+            </summary>
+            <div className="mt-3">
+              <input
+                data-testid="config-api-path-input"
+                value={form.api_path}
+                onChange={(e) => onField("api_path", e.target.value)}
+                placeholder="/streamer/api/v3 (leave empty to auto-detect)"
+                className="w-full px-3.5 py-2.5 text-sm mono"
+              />
+              <p className="text-[11px] text-[var(--muted)] mt-1.5 leading-relaxed">
+                Leave empty and click <span className="font-semibold">Test connection</span> — the panel will probe
+                <span className="mono"> /streamer/api/v3</span>, <span className="mono">/flussonic/api</span>,
+                <span className="mono"> /api/v3</span> and <span className="mono">/erlyvideo/api</span>,
+                and auto-fill the one that works.
+              </p>
+            </div>
+          </details>
+
           {/* Test result */}
           {testResult && (
             <div
@@ -173,13 +200,20 @@ export default function Settings() {
               }`}
             >
               {testResult.ok ? <CheckCircle2 className="w-4 h-4 mt-0.5" /> : <XCircle className="w-4 h-4 mt-0.5" />}
-              <div className="text-xs">
+              <div className="text-xs flex-1 min-w-0">
                 <div className="font-semibold">
                   {testResult.ok ? "Connection OK" : "Connection failed"}
                 </div>
                 <div className="mono mt-0.5 break-all">
-                  {testResult.ok ? `Flussonic ${testResult.version}` : testResult.error}
+                  {testResult.ok
+                    ? `Flussonic ${testResult.version} · API at ${testResult.api_path || "/streamer/api/v3"}`
+                    : testResult.error}
                 </div>
+                {!testResult.ok && Array.isArray(testResult.tried) && testResult.tried.length > 1 && (
+                  <div className="mono mt-1.5 opacity-80 text-[10px]">
+                    Tried: {testResult.tried.join(", ")}
+                  </div>
+                )}
               </div>
             </div>
           )}
