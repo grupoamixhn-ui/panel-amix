@@ -27,6 +27,10 @@ export default function Settings() {
         password: "",
         demo_mode: !!c.data.demo_mode,
         api_path: c.data.api_path || "",
+        public_host: c.data.public_host || "",
+        srt_port: c.data.srt_port || 9998,
+        rtmp_port: c.data.rtmp_port || 1935,
+        https: c.data.https !== false,
       });
     }
   };
@@ -61,6 +65,10 @@ export default function Settings() {
         user: form.user,
         demo_mode: form.demo_mode,
         api_path: form.api_path || null,
+        public_host: form.public_host || "",
+        srt_port: Number(form.srt_port) || 9998,
+        rtmp_port: Number(form.rtmp_port) || 1935,
+        https: !!form.https,
         password: form.password === "" && cfg?.has_password ? null : form.password,
       };
       await api.put("/config/flussonic", body);
@@ -78,7 +86,7 @@ export default function Settings() {
     if (!window.confirm("Clear stored Flussonic config and return to DEMO mode?")) return;
     await api.post("/config/flussonic/clear");
     await loadAll();
-    setForm({ url: "", user: "", password: "", demo_mode: false, api_path: "" });
+    setForm({ url: "", user: "", password: "", demo_mode: false, api_path: "", public_host: "", srt_port: 9998, rtmp_port: 1935, https: true });
     setTestResult(null);
     setTouched(false);
   };
@@ -185,6 +193,64 @@ export default function Settings() {
                 <span className="mono"> /streamer/api/v3</span>, <span className="mono">/flussonic/api</span>,
                 <span className="mono"> /api/v3</span> and <span className="mono">/erlyvideo/api</span>,
                 and auto-fill the one that works.
+              </p>
+            </div>
+          </details>
+
+          <details className="mt-3" open>
+            <summary className="text-xs font-medium text-[var(--text-2)] cursor-pointer select-none hover:text-[var(--primary)]">
+              Public delivery · DNS &amp; ports shown to your viewers
+            </summary>
+            <div className="mt-3 grid grid-cols-12 gap-3">
+              <div className="col-span-8">
+                <label className="text-xs font-medium text-[var(--text-2)] block mb-1.5">Public host (DNS)</label>
+                <input
+                  data-testid="config-public-host-input"
+                  value={form.public_host}
+                  onChange={(e) => onField("public_host", e.target.value)}
+                  placeholder="streaming.yourdomain.com (defaults to Server URL host)"
+                  className="w-full px-3.5 py-2.5 text-sm mono"
+                />
+              </div>
+              <div className="col-span-4">
+                <label className="text-xs font-medium text-[var(--text-2)] block mb-1.5">HLS over</label>
+                <select
+                  data-testid="config-https-select"
+                  value={form.https ? "https" : "http"}
+                  onChange={(e) => onField("https", e.target.value === "https")}
+                  className="w-full px-3 py-2.5 text-sm mono"
+                >
+                  <option value="https">HTTPS</option>
+                  <option value="http">HTTP</option>
+                </select>
+              </div>
+              <div className="col-span-6">
+                <label className="text-xs font-medium text-[var(--text-2)] block mb-1.5">RTMP port</label>
+                <input
+                  data-testid="config-rtmp-port-input"
+                  type="number" min="1" max="65535"
+                  value={form.rtmp_port}
+                  onChange={(e) => onField("rtmp_port", e.target.value)}
+                  placeholder="1935"
+                  className="w-full px-3.5 py-2.5 text-sm mono"
+                />
+              </div>
+              <div className="col-span-6">
+                <label className="text-xs font-medium text-[var(--text-2)] block mb-1.5">SRT port</label>
+                <input
+                  data-testid="config-srt-port-input"
+                  type="number" min="1" max="65535"
+                  value={form.srt_port}
+                  onChange={(e) => onField("srt_port", e.target.value)}
+                  placeholder="9998"
+                  className="w-full px-3.5 py-2.5 text-sm mono"
+                />
+              </div>
+              <p className="col-span-12 text-[11px] text-[var(--muted)] leading-relaxed">
+                These are used to build the playback / publish URLs shown on each stream
+                (<span className="mono">https://HOST/STREAM/index.m3u8</span>,
+                <span className="mono"> rtmp://HOST/STREAM</span>,
+                <span className="mono"> srt://HOST:PORT?streamid=STREAM</span>).
               </p>
             </div>
           </details>

@@ -51,6 +51,10 @@ async def _active_config() -> dict[str, Any]:
         "password": cfg.get("password", os.environ.get("FLUSSONIC_PASS", "")),
         "demo_mode": cfg["demo_mode"] if "demo_mode" in cfg else env_demo,
         "api_path": (cfg.get("api_path") or os.environ.get("FLUSSONIC_API_PATH") or "/streamer/api/v3").rstrip("/"),
+        "public_host": (cfg.get("public_host") or "").strip(),
+        "srt_port": int(cfg.get("srt_port") or 9998),
+        "rtmp_port": int(cfg.get("rtmp_port") or 1935),
+        "https": bool(cfg.get("https", True)),
     }
 
 
@@ -63,10 +67,19 @@ async def get_public_config() -> dict[str, Any]:
         "demo_mode": c["demo_mode"],
         "has_password": bool(c["password"]),
         "api_path": c["api_path"],
+        "public_host": c["public_host"],
+        "srt_port": c["srt_port"],
+        "rtmp_port": c["rtmp_port"],
+        "https": c["https"],
     }
 
 
-async def save_config(*, url: str, user: str, password: str | None, demo_mode: bool, api_path: str | None = None) -> None:
+async def save_config(
+    *, url: str, user: str, password: str | None, demo_mode: bool,
+    api_path: str | None = None, public_host: str | None = None,
+    srt_port: int | None = None, rtmp_port: int | None = None,
+    https: bool | None = None,
+) -> None:
     if _DB is None:
         raise RuntimeError("DB not initialized")
     update: dict[str, Any] = {
@@ -77,6 +90,14 @@ async def save_config(*, url: str, user: str, password: str | None, demo_mode: b
     }
     if api_path is not None:
         update["api_path"] = ("/" + api_path.strip().strip("/")) if api_path else "/streamer/api/v3"
+    if public_host is not None:
+        update["public_host"] = public_host.strip()
+    if srt_port is not None:
+        update["srt_port"] = int(srt_port)
+    if rtmp_port is not None:
+        update["rtmp_port"] = int(rtmp_port)
+    if https is not None:
+        update["https"] = bool(https)
     if password is not None:
         update["password"] = password
     await _DB.config.update_one(
@@ -471,3 +492,39 @@ async def list_logs(limit: int = 100) -> list[dict[str, Any]]:
         _seed_mock()
         return _MOCK_LOGS[:limit]
     return []
+
+
+def _host_from_url(url: str) -> str:
+    """Extract host (without scheme/port) from a Flussonic URL."""
+    if not url:
+        return ""
+    s = url
+    if "://" in s:
+        s = s.split("://", 1)[1]
+    return s.split("/")[0].split(":")[0]
+
+
+async def stream_outputs(name: str) -> dict[str, Any]:
+    """Return ready-to-share playback URLs for a stream."""
+    cfg = await _active_config()
+    host = cfg["public_host"] or _host_from_url(cfg["url"]) or "your-flussonic-host"
+    scheme = "https" if cfg["https"] else "http"
+    rtmp_p = cfg["rtmp_port"]
+    srt_p = cfg["srt_port"]
+    rtmp_host = f"{host}:{rtmp_p}" if rtmp_p not in (1935,) else host
+    return {
+        "stream": name,
+        "outputs": [
+            {"label": "HLS (.m3u8)", "protocol": "hls", "url": f"{scheme}://{host}/{name}/index.m3u8"},
+            {"label": "HLS Low-Latency", "protocol": "hls", "url": f"{scheme}://{host}/{name}/index_ll.m3u8"},
+            {"label": "DASH (.mpd)", "protocol": "dash", "url": f"{scheme}://{host}/{name}/index.mpd"},
+            {"label": "RTMP pull", "protocol": "rtmp", "url": f"rtmp://{rtmp_host}/{name}"},
+            {"label": "SRT pull", "protocol": "srt", "url": f"srt://{host}:{srt_p}?streamid={name}"},
+            {"label": "RTSP", "protocol": "rtsp", "url": f"rtsp://{host}/{name}"},
+        ],
+        "publish": [
+            {"label": "RTMP publish (OBS / encoder)", "protocol": "rtmp", "url": f"rtmp://{rtmp_host}/{name}", "key": name},
+            {"label": "SRT publish", "protocol": "srt", "url": f"srt://{host}:{srt_p}?streamid=publish:{name}"},
+        ],
+        "host": host,
+    }

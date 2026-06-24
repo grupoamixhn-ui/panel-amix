@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import api, { fmtBitrate, fmtUptime } from "../api";
 import PageHeader from "../components/PageHeader";
-import { Plus, Play, Pause, Trash2, X, Search } from "lucide-react";
+import StreamWizard from "../components/StreamWizard";
+import OutputsModal from "../components/OutputsModal";
+import { Plus, Play, Pause, Trash2, Share2, Search } from "lucide-react";
 
 function statusPill(s) {
   if (s.alive) return <span className="pill pill-live"><span className="dot dot-live" />Live</span>;
@@ -9,93 +11,12 @@ function statusPill(s) {
   return <span className="pill pill-off">Idle</span>;
 }
 
-function StreamForm({ initial, onClose, onSaved }) {
-  const editing = !!initial?.name;
-  const [name, setName] = useState(initial?.name || "");
-  const [url, setUrl] = useState(initial?.inputs?.[0]?.url || "");
-  const [title, setTitle] = useState(initial?.title || "");
-  const [dvr, setDvr] = useState(!!initial?.dvr_enabled);
-  const [err, setErr] = useState("");
-  const [busy, setBusy] = useState(false);
-
-  const submit = async (e) => {
-    e.preventDefault();
-    setBusy(true); setErr("");
-    try {
-      if (editing) {
-        await api.put(`/streams/${name}`, { url, title, dvr });
-      } else {
-        await api.post("/streams", { name, url, title, dvr });
-      }
-      onSaved();
-    } catch (e2) {
-      const m = e2.response?.data?.detail;
-      setErr(typeof m === "string" ? m : "Save failed");
-    } finally { setBusy(false); }
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 bg-[#0F172A]/40 backdrop-blur-sm flex items-center justify-center p-4" data-testid="stream-form-modal">
-      <form onSubmit={submit} className="w-full max-w-lg bg-[var(--surface)] rounded-2xl shadow-[var(--shadow-lg)] p-7 relative border border-[var(--border)]">
-        <button type="button" onClick={onClose} className="absolute top-5 right-5 text-[var(--muted)] hover:text-[var(--text)] transition-colors" data-testid="stream-form-close">
-          <X className="w-4 h-4" />
-        </button>
-        <div className="label mb-1">{editing ? "Modify stream" : "New stream"}</div>
-        <h3 className="text-xl font-semibold mb-6 tracking-tight">{editing ? name : "Configure ingest"}</h3>
-
-        {!editing && (
-          <>
-            <label className="text-xs font-medium text-[var(--text-2)] block mb-1.5">Name</label>
-            <input
-              data-testid="stream-form-name"
-              value={name} onChange={(e) => setName(e.target.value.replace(/[^a-zA-Z0-9_-]/g, ""))}
-              required placeholder="my_stream"
-              className="w-full px-3.5 py-2.5 mb-4 mono text-sm"
-            />
-          </>
-        )}
-
-        <label className="text-xs font-medium text-[var(--text-2)] block mb-1.5">Source URL</label>
-        <input
-          data-testid="stream-form-url"
-          value={url} onChange={(e) => setUrl(e.target.value)}
-          required placeholder="rtsp://… / srt://… / udp://… / rtmp://…"
-          className="w-full px-3.5 py-2.5 mb-4 mono text-sm"
-        />
-
-        <label className="text-xs font-medium text-[var(--text-2)] block mb-1.5">Title</label>
-        <input
-          data-testid="stream-form-title"
-          value={title} onChange={(e) => setTitle(e.target.value)}
-          placeholder="Friendly name"
-          className="w-full px-3.5 py-2.5 mb-4 text-sm"
-        />
-
-        <label className="flex items-center gap-2.5 mt-3 mb-7 text-sm cursor-pointer select-none" data-testid="stream-form-dvr">
-          <input type="checkbox" checked={dvr} onChange={(e) => setDvr(e.target.checked)} className="w-4 h-4 accent-[var(--primary)]" />
-          <span>Enable DVR archive</span>
-        </label>
-
-        {err && <div className="mb-4 px-3 py-2 rounded-lg bg-[var(--error-soft)] border border-[#FECACA] text-[var(--error)] text-xs">{err}</div>}
-
-        <div className="flex gap-3 justify-end">
-          <button type="button" onClick={onClose} className="btn btn-ghost" data-testid="stream-form-cancel">
-            Cancel
-          </button>
-          <button type="submit" disabled={busy} className="btn btn-primary" data-testid="stream-form-submit">
-            {busy ? "Saving…" : editing ? "Save changes" : "Create stream"}
-          </button>
-        </div>
-      </form>
-    </div>
-  );
-}
-
 export default function Streams() {
   const [streams, setStreams] = useState([]);
   const [q, setQ] = useState("");
-  const [open, setOpen] = useState(false);
+  const [wizardOpen, setWizardOpen] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [outputsFor, setOutputsFor] = useState(null);
 
   const load = useCallback(async () => {
     try {
@@ -136,7 +57,7 @@ export default function Streams() {
         testId="streams-header"
         right={
           <button
-            onClick={() => { setEditing(null); setOpen(true); }}
+            onClick={() => { setEditing(null); setWizardOpen(true); }}
             className="btn btn-primary"
             data-testid="new-stream-button"
           >
@@ -179,7 +100,7 @@ export default function Streams() {
                   <tr key={s.name} className="border-t border-[var(--border)] hover:bg-[var(--surface-2)] transition-colors" data-testid={`stream-row-${s.name}`}>
                     <td className="px-5 py-3.5">{statusPill(s)}</td>
                     <td className="px-5 py-3.5">
-                      <button onClick={() => { setEditing(s); setOpen(true); }} className="font-medium hover:text-[var(--primary)] transition-colors" data-testid={`stream-edit-${s.name}`}>
+                      <button onClick={() => { setEditing(s); setWizardOpen(true); }} className="font-medium hover:text-[var(--primary)] transition-colors" data-testid={`stream-edit-${s.name}`}>
                         {s.name}
                       </button>
                       {s.title && <div className="text-xs text-[var(--muted)]">{s.title}</div>}
@@ -195,6 +116,14 @@ export default function Streams() {
                     </td>
                     <td className="px-5 py-3.5 text-right">
                       <div className="inline-flex items-center gap-2">
+                        <button
+                          onClick={() => setOutputsFor(s.name)}
+                          className="btn-icon"
+                          title="Output URLs (HLS / RTMP / SRT)"
+                          data-testid={`stream-outputs-${s.name}`}
+                        >
+                          <Share2 className="w-3.5 h-3.5" />
+                        </button>
                         <button
                           onClick={() => toggle(s.name, !s.alive)}
                           className="btn-icon"
@@ -224,12 +153,16 @@ export default function Streams() {
         </div>
       </div>
 
-      {open && (
-        <StreamForm
+      {wizardOpen && (
+        <StreamWizard
           initial={editing}
-          onClose={() => setOpen(false)}
-          onSaved={() => { setOpen(false); load(); }}
+          onClose={() => setWizardOpen(false)}
+          onSaved={(name) => { setWizardOpen(false); load(); setOutputsFor(name); }}
         />
+      )}
+
+      {outputsFor && (
+        <OutputsModal streamName={outputsFor} onClose={() => setOutputsFor(null)} />
       )}
     </div>
   );

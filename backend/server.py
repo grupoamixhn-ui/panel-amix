@@ -109,6 +109,10 @@ class FlussonicConfigIn(BaseModel):
     password: str | None = None  # None = keep existing
     demo_mode: bool = False
     api_path: str | None = None
+    public_host: str | None = None
+    srt_port: int | None = None
+    rtmp_port: int | None = None
+    https: bool | None = None
 
 
 class FlussonicTestIn(BaseModel):
@@ -192,6 +196,11 @@ async def streams_toggle(name: str, body: ToggleIn, user=Depends(get_current_use
         raise HTTPException(status_code=404, detail="Stream not found")
     return s
 
+
+@api.get("/streams/{name}/outputs")
+async def streams_outputs(name: str, user=Depends(get_current_user)):
+    return await flussonic.stream_outputs(name)
+
 @api.get("/sessions")
 async def sessions_list(user=Depends(get_current_user)):
     return await flussonic.list_sessions()
@@ -216,6 +225,8 @@ async def config_put(body: FlussonicConfigIn, user=Depends(get_current_user)):
     await flussonic.save_config(
         url=body.url, user=body.user, password=body.password,
         demo_mode=body.demo_mode, api_path=body.api_path,
+        public_host=body.public_host, srt_port=body.srt_port,
+        rtmp_port=body.rtmp_port, https=body.https,
     )
     return await flussonic.get_public_config()
 
