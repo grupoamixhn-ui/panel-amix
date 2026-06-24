@@ -453,6 +453,11 @@ async def stats(points: int = 30, user=Depends(get_current_user)):
     return await flussonic.get_stats_timeseries(points)
 
 
+@api.get("/monitor/metrics")
+async def monitor_metrics(user=Depends(get_current_user)):
+    return await flussonic.get_monitor_metrics()
+
+
 # ---------- Flussonic connection config ----------
 @api.get("/config/flussonic")
 async def config_get(user=Depends(get_current_user)):

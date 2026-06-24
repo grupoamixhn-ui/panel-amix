@@ -7,6 +7,7 @@ import Dashboard from "./pages/Dashboard";
 import Streams from "./pages/Streams";
 import Sessions from "./pages/Sessions";
 import Stats from "./pages/Stats";
+import Monitor from "./pages/Monitor";
 import Resellers from "./pages/Resellers";
 import Settings from "./pages/Settings";
 import Layout from "./components/Layout";
@@ -41,6 +42,7 @@ export default function App() {
             <Route path="/streams" element={<Guard><Streams /></Guard>} />
             <Route path="/sessions" element={<Guard><Sessions /></Guard>} />
             <Route path="/stats" element={<Guard><Stats /></Guard>} />
+            <Route path="/monitor" element={<Guard><Monitor /></Guard>} />
             <Route path="/resellers" element={<Guard><Resellers /></Guard>} />
             <Route path="/settings" element={<Guard><Settings /></Guard>} />
             <Route path="*" element={<Navigate to="/" replace />} />

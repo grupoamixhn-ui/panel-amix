@@ -535,6 +535,134 @@ async def get_stats_timeseries(points: int = 30) -> dict[str, Any]:
     return {"series": series}
 
 
+async def get_monitor_metrics() -> dict[str, Any]:
+    """Single snapshot of live server metrics for the real-time Monitor page.
+
+    Returns CPU/RAM if Flussonic ``/server`` (and optionally ``/system``) are
+    reachable; otherwise ``cpu_ram_available=False`` so the UI can show a
+    helpful notice and keep the bandwidth/viewer graphs working.
+    """
+    if await _is_demo():
+        _seed_mock()
+        bw_in = sum(s["bitrate"] for s in _MOCK_STREAMS.values())
+        bw_out = int(bw_in * (1.4 + random.random() * 0.5))
+        clients = sum(s["clients"] for s in _MOCK_STREAMS.values())
+        live = sum(1 for s in _MOCK_STREAMS.values() if s["alive"])
+        return {
+            "ts": datetime.now(timezone.utc).isoformat(),
+            "cpu": round(20 + random.random() * 40, 1),
+            "memory": round(35 + random.random() * 25, 1),
+            "bandwidth_in_bps": bw_in,
+            "bandwidth_out_bps": bw_out,
+            "clients": clients,
+            "streams_live": live,
+            "streams_total": len(_MOCK_STREAMS),
+            "cpu_ram_available": True,
+            "source_warning": "",
+            "mode": "demo",
+        }
+
+    cfg = await _active_config()
+    cpu = 0.0
+    mem = 0.0
+    cpu_ram_available = False
+    warning = ""
+    bw_out = 0
+    bw_in = 0
+
+    async with _make_client(cfg) as c:
+        # Try /server first
+        server_payload: dict[str, Any] = {}
+        server_status: int | None = None
+        try:
+            r = await c.get(f"{cfg['api_path']}/server")
+            server_status = r.status_code
+            if r.status_code < 400 and r.headers.get("content-type", "").startswith("application/json"):
+                try:
+                    server_payload = r.json() or {}
+                except Exception:  # noqa: BLE001
+                    server_payload = {}
+        except httpx.HTTPError as e:
+            warning = f"Server endpoint unreachable: {type(e).__name__}"
+
+        # Fallback: /system (some Flussonic versions expose detailed sys stats here)
+        sys_payload: dict[str, Any] = {}
+        if not server_payload:
+            for alt in ("/system", "/sys", "/server/stats"):
+                try:
+                    r2 = await c.get(f"{cfg['api_path']}{alt}")
+                    if r2.status_code < 400 and r2.headers.get("content-type", "").startswith("application/json"):
+                        sys_payload = r2.json() or {}
+                        break
+                except httpx.HTTPError:
+                    continue
+
+        payload = server_payload or sys_payload
+        if payload:
+            # Flussonic publishes cpu/memory under various keys
+            cpu_val = (
+                payload.get("cpu_usage")
+                or payload.get("cpu")
+                or (payload.get("system") or {}).get("cpu")
+                or 0
+            )
+            mem_val = (
+                payload.get("memory_usage")
+                or payload.get("memory")
+                or (payload.get("system") or {}).get("memory")
+                or 0
+            )
+            try:
+                cpu = float(cpu_val)
+                mem = float(mem_val)
+                # Some servers return 0-1 fractions instead of 0-100
+                if 0 < cpu <= 1:
+                    cpu *= 100
+                if 0 < mem <= 1:
+                    mem *= 100
+                cpu_ram_available = True
+            except (TypeError, ValueError):
+                cpu_ram_available = False
+        elif server_status == 404:
+            warning = (
+                "Flussonic /server endpoint is blocked by your reverse proxy (404). "
+                "Ask your operator to whitelist /streamer/api/v3/server to enable CPU/RAM metrics."
+            )
+        elif server_status in (401, 403):
+            warning = f"Auth failed on /server (HTTP {server_status})."
+
+        # Streams → bandwidth + viewers
+        try:
+            sr = await c.get(f"{cfg['api_path']}/streams")
+            streams_raw = sr.json() if sr.status_code == 200 else []
+            if isinstance(streams_raw, dict):
+                streams_raw = streams_raw.get("streams", [])
+        except httpx.HTTPError:
+            streams_raw = []
+
+    normalized = [_normalize_stream(s.get("name") or "?", s) for s in streams_raw]
+    live = sum(1 for s in normalized if s["alive"])
+    clients = sum(s["clients"] for s in normalized)
+    bw_out = sum(s["bitrate"] for s in normalized)
+    # input bandwidth ~ same magnitude as output for a single-source stream;
+    # without explicit /sessions roll-up we approximate from per-stream stats.
+    bw_in = bw_out
+
+    return {
+        "ts": datetime.now(timezone.utc).isoformat(),
+        "cpu": round(cpu, 1),
+        "memory": round(mem, 1),
+        "bandwidth_in_bps": int(bw_in),
+        "bandwidth_out_bps": int(bw_out),
+        "clients": int(clients),
+        "streams_live": int(live),
+        "streams_total": len(normalized),
+        "cpu_ram_available": cpu_ram_available,
+        "source_warning": warning,
+        "mode": "live",
+    }
+
+
 async def list_logs(limit: int = 100) -> list[dict[str, Any]]:
     if await _is_demo():
         _seed_mock()

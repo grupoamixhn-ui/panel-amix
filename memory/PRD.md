@@ -37,15 +37,16 @@ User wants a web admin panel for the Flussonic Media Server API. Confirmed via c
 ## What's Been Implemented (2026-06-24)
 - ✅ JWT auth (`/api/auth/login`, `/auth/me`, `/auth/logout`) + admin seeding
 - ✅ Flussonic client wrapper (demo + real httpx-based)
-- ✅ Endpoints: `/server/info`, `/streams` (GET/POST/GET/PUT/DELETE), `/streams/{name}/toggle`, `/sessions`, `/stats`, `/logs`
+- ✅ Endpoints: `/server/info`, `/streams` (GET/POST/GET/PUT/DELETE), `/streams/{name}/toggle`, `/sessions`, `/stats`, `/logs`, `/monitor/metrics`
 - ✅ Login page (NOC dark theme, image background)
 - ✅ Dashboard with 4 KPIs, viewers & bandwidth area charts, top streams
 - ✅ Streams page (table, search, modal CRUD, start/stop, delete)
 - ✅ Sessions page (live table, protocol filter)
 - ✅ Stats page (history + per-stream bar chart)
-- ✅ Logs page (terminal-style, level filter, pause)
-- ✅ Settings page (mode indicator + integration instructions)
-- ✅ Testing agent results: backend 14/14 pytest cases, frontend full flow PASSED
+- ✅ Settings page (Flussonic connection editor, branding)
+- ✅ Resellers/Clients RBAC with stream + viewer quotas
+- ✅ Stream Wizard (SRT/RTMP/HLS), embedded hls.js preview
+- ✅ Real-time Monitor page (CPU, RAM, Bandwidth in/out, Viewers, Streams) with rolling 60-sample window, 3s refresh, graceful 404 handling for `/server` endpoint blocked by reverse proxy (2026-06-24)
 
 ## Prioritized Backlog
 **P1 (post-MVP polish)**
