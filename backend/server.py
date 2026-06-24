@@ -201,6 +201,11 @@ async def streams_toggle(name: str, body: ToggleIn, user=Depends(get_current_use
 async def streams_outputs(name: str, user=Depends(get_current_user)):
     return await flussonic.stream_outputs(name)
 
+
+@api.get("/streams/{name}/sessions")
+async def streams_sessions(name: str, user=Depends(get_current_user)):
+    return await flussonic.list_sessions_for_stream(name)
+
 @api.get("/sessions")
 async def sessions_list(user=Depends(get_current_user)):
     return await flussonic.list_sessions()
@@ -208,10 +213,6 @@ async def sessions_list(user=Depends(get_current_user)):
 @api.get("/stats")
 async def stats(points: int = 30, user=Depends(get_current_user)):
     return await flussonic.get_stats_timeseries(points)
-
-@api.get("/logs")
-async def logs_list(limit: int = 100, user=Depends(get_current_user)):
-    return await flussonic.list_logs(limit)
 
 
 # ---------- Flussonic connection config ----------

@@ -233,17 +233,49 @@ def _normalize_stream(name: str, data: dict[str, Any]) -> dict[str, Any]:
     if not inputs and data.get("url"):
         inputs = [{"url": data["url"]}]
     stats = data.get("stats") or data.get("running") or {}
-    alive = bool(data.get("alive") if "alive" in data else stats.get("alive", False))
-    status = "running" if alive else (data.get("status") or "stopped")
+
+    alive = bool(
+        stats.get("alive")
+        if "alive" in stats else data.get("alive")
+        if "alive" in data else stats.get("running", False)
+    )
+    status = stats.get("status") or data.get("status") or ("running" if alive else "stopped")
+
+    # Flussonic v3 publishes stats under various keys depending on version
+    clients = (
+        stats.get("online_clients")
+        or stats.get("client_count")
+        or stats.get("clients")
+        or data.get("clients")
+        or 0
+    )
+    bitrate = (
+        stats.get("output_bandwidth")
+        or stats.get("out_bandwidth")
+        or stats.get("inputs_bandwidth")
+        or stats.get("bitrate")
+        or data.get("bitrate")
+        or 0
+    )
+    # uptime in seconds — Flussonic sends `opened_at` as ms epoch and `lifetime` as ms
+    uptime = 0
+    if alive:
+        if isinstance(stats.get("lifetime"), (int, float)):
+            uptime = int(stats["lifetime"] / 1000)
+        elif isinstance(stats.get("opened_at"), (int, float)):
+            import time as _t
+            uptime = max(0, int(_t.time() - stats["opened_at"] / 1000))
+        else:
+            uptime = int(stats.get("uptime") or data.get("uptime") or 0)
     return {
         "name": name,
         "title": data.get("title") or data.get("name") or name,
         "inputs": inputs,
         "status": status,
         "alive": alive,
-        "bitrate": int(stats.get("bitrate") or data.get("bitrate") or 0),
-        "clients": int(stats.get("clients") or data.get("clients") or 0),
-        "uptime": int(stats.get("uptime") or data.get("uptime") or 0),
+        "bitrate": int(bitrate),
+        "clients": int(clients),
+        "uptime": int(uptime),
         "created_at": data.get("created_at") or "",
     }
 
@@ -265,32 +297,40 @@ async def get_server_info() -> dict[str, Any]:
         }
     cfg = await _active_config()
     async with _make_client(cfg) as c:
+        # /server is the only call here that can return early — fall through if it fails so the
+        # dashboard still shows aggregates computed from /streams.
+        server_data: dict[str, Any] = {}
         try:
             r = await c.get(f"{cfg['api_path']}/server")
-            r.raise_for_status()
-            data = r.json()
-        except httpx.HTTPError as e:
-            return {"mode": "live", "error": str(e), "version": "unreachable",
-                    "streams_total": 0, "streams_live": 0, "clients": 0, "bandwidth_bps": 0,
-                    "cpu": 0, "memory": 0, "uptime": 0}
-        # Try to compute aggregates from /streams if /server is sparse
+            if r.status_code < 400:
+                try:
+                    server_data = r.json() if r.headers.get("content-type", "").startswith("application/json") else {}
+                except Exception:  # noqa: BLE001
+                    server_data = {}
+        except httpx.HTTPError:
+            server_data = {}
+
         try:
             s2 = await c.get(f"{cfg['api_path']}/streams")
-            streams = s2.json() if s2.status_code == 200 else []
-            if isinstance(streams, dict):
-                streams = streams.get("streams", [])
+            streams_raw = s2.json() if s2.status_code == 200 else []
+            if isinstance(streams_raw, dict):
+                streams_raw = streams_raw.get("streams", [])
         except httpx.HTTPError:
-            streams = []
-        live = sum(1 for s in streams if (s.get("alive") or (s.get("stats") or {}).get("alive")))
-        clients = sum(int((s.get("stats") or {}).get("clients", 0)) for s in streams)
-        bw = sum(int((s.get("stats") or {}).get("bitrate", 0)) for s in streams)
+            streams_raw = []
+        normalized = [_normalize_stream(s.get("name") or "?", s) for s in streams_raw]
+        live = sum(1 for s in normalized if s["alive"])
+        clients = sum(s["clients"] for s in normalized)
+        bw = sum(s["bitrate"] for s in normalized)
         return {
-            **data, "mode": "live",
-            "version": data.get("version", "live"),
-            "uptime": int(data.get("uptime", 0)),
-            "streams_total": len(streams), "streams_live": live,
-            "clients": clients, "bandwidth_bps": bw,
-            "cpu": data.get("cpu", 0), "memory": data.get("memory", 0),
+            "mode": "live",
+            "version": server_data.get("version", "live"),
+            "uptime": int(server_data.get("uptime", 0)),
+            "streams_total": len(normalized),
+            "streams_live": live,
+            "clients": clients,
+            "bandwidth_bps": bw,
+            "cpu": server_data.get("cpu", 0),
+            "memory": server_data.get("memory", 0),
         }
 
 
@@ -437,21 +477,37 @@ async def list_sessions() -> list[dict[str, Any]]:
         data = r.json()
         if isinstance(data, dict):
             data = data.get("sessions", [])
+        import time as _t
+        now = _t.time()
         out = []
         for s in data:
+            started_ms = s.get("started_at") or s.get("opened_at")
+            if isinstance(started_ms, (int, float)) and started_ms > 1e12:
+                started_iso = datetime.fromtimestamp(started_ms / 1000, tz=timezone.utc).isoformat()
+                duration = max(1, now - started_ms / 1000)
+            else:
+                started_iso = str(started_ms or "")
+                duration = 1
+            bytes_total = int(s.get("bytes") or s.get("bytes_out") or 0)
+            bitrate = int((bytes_total * 8) / duration) if duration else 0
             out.append({
                 "id": str(s.get("id") or s.get("session_id") or s.get("token") or ""),
                 "stream": s.get("name") or s.get("stream") or "",
                 "type": s.get("type") or "play",
-                "protocol": (s.get("protocol") or s.get("proto") or "hls").lower(),
+                "protocol": (s.get("proto") or s.get("protocol") or "hls").lower(),
                 "ip": s.get("ip") or s.get("client_ip") or "",
                 "country": s.get("country") or s.get("country_code") or "",
                 "user_agent": s.get("user_agent") or s.get("ua") or "",
-                "bytes": int(s.get("bytes") or s.get("bytes_out") or 0),
-                "started_at": s.get("started_at") or "",
-                "bitrate": int(s.get("bitrate") or 0),
+                "bytes": bytes_total,
+                "started_at": started_iso,
+                "bitrate": int(s.get("bitrate") or bitrate),
             })
         return out
+
+
+async def list_sessions_for_stream(name: str) -> list[dict[str, Any]]:
+    all_sessions = await list_sessions()
+    return [s for s in all_sessions if s.get("stream") == name]
 
 
 async def get_stats_timeseries(points: int = 30) -> dict[str, Any]:

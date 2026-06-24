@@ -1,8 +1,10 @@
+import { useEffect, useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth";
 import { useBranding } from "../branding";
+import api from "../api";
 import {
-  Activity, LayoutDashboard, Radio, Users, BarChart3, Terminal, LogOut, Settings,
+  Activity, LayoutDashboard, Radio, Users, BarChart3, LogOut, Settings,
 } from "lucide-react";
 
 const navItems = [
@@ -10,7 +12,6 @@ const navItems = [
   { to: "/streams", label: "Streams", icon: Radio, tid: "nav-streams" },
   { to: "/sessions", label: "Sessions", icon: Users, tid: "nav-sessions" },
   { to: "/stats", label: "Statistics", icon: BarChart3, tid: "nav-stats" },
-  { to: "/logs", label: "Logs", icon: Terminal, tid: "nav-logs" },
   { to: "/settings", label: "Settings", icon: Settings, tid: "nav-settings" },
 ];
 
@@ -20,6 +21,16 @@ export default function Layout({ children }) {
   const nav = useNavigate();
   const displayBrand = brand_name || "Flussonic";
   const displayTagline = tagline || "NOC Console";
+  const [info, setInfo] = useState(null);
+
+  useEffect(() => {
+    const load = () => api.get("/server/info").then((r) => setInfo(r.data)).catch(() => {});
+    load();
+    const t = setInterval(load, 10000);
+    return () => clearInterval(t);
+  }, []);
+
+  const isDemo = info?.mode !== "live";
 
   return (
     <div className="min-h-screen flex relative z-10">
@@ -62,9 +73,22 @@ export default function Layout({ children }) {
           ))}
         </nav>
 
-        <div className="m-3 mt-2 p-3 rounded-xl border border-[var(--border)] bg-gradient-to-br from-[var(--primary-soft)] to-white">
-          <div className="text-xs font-semibold text-[var(--text)] mb-0.5">Demo mode active</div>
-          <div className="text-[11px] text-[var(--muted)] leading-snug">Connect a real Flussonic server in Settings.</div>
+        <div className={`m-3 mt-2 p-3 rounded-xl border ${
+          isDemo
+            ? "border-[var(--border)] bg-gradient-to-br from-[var(--primary-soft)] to-white"
+            : "border-[#BBF7D0] bg-gradient-to-br from-[var(--live-soft)] to-white"
+        }`}>
+          <div className="flex items-center gap-2 mb-0.5">
+            <span className={`dot ${isDemo ? "dot-warn" : "dot-live"}`} />
+            <div className="text-xs font-semibold text-[var(--text)]">
+              {isDemo ? "Demo mode" : "Live · connected"}
+            </div>
+          </div>
+          <div className="text-[11px] text-[var(--muted)] leading-snug">
+            {isDemo
+              ? "Connect a real Flussonic server in Settings."
+              : `${info?.streams_live ?? 0}/${info?.streams_total ?? 0} streams · ${info?.clients ?? 0} viewers`}
+          </div>
         </div>
 
         <div className="border-t border-[var(--border)] p-3">

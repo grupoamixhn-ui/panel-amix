@@ -3,7 +3,8 @@ import api, { fmtBitrate, fmtUptime } from "../api";
 import PageHeader from "../components/PageHeader";
 import StreamWizard from "../components/StreamWizard";
 import OutputsModal from "../components/OutputsModal";
-import { Plus, Play, Pause, Trash2, Share2, Search, Pencil } from "lucide-react";
+import StreamClientsModal from "../components/StreamClientsModal";
+import { Plus, Play, Pause, Trash2, Share2, Search, Pencil, Users } from "lucide-react";
 
 function statusPill(s) {
   if (s.alive) return <span className="pill pill-live"><span className="dot dot-live" />Live</span>;
@@ -17,6 +18,7 @@ export default function Streams() {
   const [wizardOpen, setWizardOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [outputsFor, setOutputsFor] = useState(null);
+  const [clientsFor, setClientsFor] = useState(null);
 
   const load = useCallback(async () => {
     try {
@@ -105,11 +107,30 @@ export default function Streams() {
                       {s.title && <div className="text-xs text-[var(--muted)]">{s.title}</div>}
                     </td>
                     <td className="px-5 py-3.5 mono text-xs text-[var(--muted)] max-w-xs truncate">{s.inputs?.[0]?.url}</td>
-                    <td className="px-5 py-3.5 mono font-semibold">{s.clients.toLocaleString()}</td>
+                    <td className="px-5 py-3.5 mono font-semibold">
+                      {s.clients > 0 ? (
+                        <button
+                          onClick={() => setClientsFor(s.name)}
+                          className="hover:text-[var(--primary)] underline-offset-2 hover:underline"
+                          title="View connected clients"
+                          data-testid={`stream-viewers-${s.name}`}
+                        >
+                          {s.clients.toLocaleString()}
+                        </button>
+                      ) : s.clients.toLocaleString()}
+                    </td>
                     <td className="px-5 py-3.5 mono">{fmtBitrate(s.bitrate)}</td>
                     <td className="px-5 py-3.5 mono text-[var(--muted)]">{fmtUptime(s.uptime)}</td>
                     <td className="px-5 py-3.5 text-right">
                       <div className="inline-flex items-center gap-2">
+                        <button
+                          onClick={() => setClientsFor(s.name)}
+                          className="btn-icon"
+                          title="Connected clients"
+                          data-testid={`stream-clients-${s.name}`}
+                        >
+                          <Users className="w-3.5 h-3.5" />
+                        </button>
                         <button
                           onClick={() => setOutputsFor(s.name)}
                           className="btn-icon"
@@ -166,6 +187,10 @@ export default function Streams() {
 
       {outputsFor && (
         <OutputsModal streamName={outputsFor} onClose={() => setOutputsFor(null)} />
+      )}
+
+      {clientsFor && (
+        <StreamClientsModal streamName={clientsFor} onClose={() => setClientsFor(null)} />
       )}
     </div>
   );
