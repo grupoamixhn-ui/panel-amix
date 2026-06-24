@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import api from "../api";
+import HlsPlayer from "./HlsPlayer";
 import { Copy, Check, X } from "lucide-react";
 
 const PROTO_BADGE = {
@@ -48,6 +49,12 @@ export default function OutputsModal({ streamName, onClose }) {
       .catch((e) => setErr(e.response?.data?.detail || e.message));
   }, [streamName]);
 
+  const hlsUrl = useMemo(() => {
+    if (!data?.outputs) return "";
+    const hls = data.outputs.find((o) => o.protocol === "hls" && o.url.endsWith(".m3u8") && !o.url.includes("_ll"));
+    return hls?.url || "";
+  }, [data]);
+
   return (
     <div className="fixed inset-0 z-50 bg-[#0F172A]/40 backdrop-blur-sm flex items-center justify-center p-4" data-testid="outputs-modal">
       <div className="w-full max-w-2xl bg-[var(--surface)] rounded-2xl shadow-[var(--shadow-lg)] border border-[var(--border)] relative max-h-[90vh] flex flex-col">
@@ -65,6 +72,8 @@ export default function OutputsModal({ streamName, onClose }) {
 
         <div className="px-7 py-5 overflow-y-auto space-y-5">
           {err && <div className="px-3 py-2 rounded-lg bg-[var(--error-soft)] border border-[#FECACA] text-[var(--error)] text-xs">{err}</div>}
+
+          {hlsUrl && <HlsPlayer url={hlsUrl} />}
 
           {data && (
             <>
