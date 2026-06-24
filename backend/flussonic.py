@@ -542,6 +542,62 @@ async def list_logs(limit: int = 100) -> list[dict[str, Any]]:
     return []
 
 
+# ---------- Alerts (state transitions) ----------
+_alerts: dict[str, dict[str, Any]] = {}     # stream_name -> alert payload
+_last_state: dict[str, dict[str, Any]] = {} # stream_name -> last seen state
+
+
+async def refresh_alerts() -> list[dict[str, Any]]:
+    """Diff current stream states vs. last poll; maintain the open-alerts list."""
+    streams = await list_streams()
+    now_iso = datetime.now(timezone.utc).isoformat()
+    seen: set[str] = set()
+    for s in streams:
+        name = s["name"]
+        seen.add(name)
+        is_ok = bool(s["alive"]) and s["status"] not in ("error",)
+        prev = _last_state.get(name, {"alive": True})
+        was_ok = bool(prev.get("alive", True))
+
+        if is_ok:
+            _alerts.pop(name, None)
+        else:
+            if name not in _alerts:
+                _alerts[name] = {
+                    "stream": name,
+                    "status": s["status"],
+                    "title": s.get("title") or name,
+                    "message": f"Stream is {s['status'].upper()}",
+                    "down_since": now_iso,
+                    "transitioned": was_ok,  # True only on the very first poll where it just turned bad
+                    "acked": False,
+                    "source": (s.get("inputs") or [{}])[0].get("url", ""),
+                }
+            else:
+                # Update status text but keep down_since/acked.
+                _alerts[name]["status"] = s["status"]
+                _alerts[name]["message"] = f"Stream is {s['status'].upper()}"
+                _alerts[name]["transitioned"] = False
+        _last_state[name] = {"alive": is_ok, "status": s["status"]}
+    # Streams that disappeared entirely (deleted) — clear their alerts
+    for stale in list(_alerts.keys()):
+        if stale not in seen:
+            _alerts.pop(stale, None)
+            _last_state.pop(stale, None)
+    return sorted(_alerts.values(), key=lambda a: a["down_since"])
+
+
+def ack_alert(name: str) -> bool:
+    if name in _alerts:
+        _alerts[name]["acked"] = True
+        return True
+    return False
+
+
+def dismiss_alert(name: str) -> bool:
+    return _alerts.pop(name, None) is not None
+
+
 async def get_branding() -> dict[str, Any]:
     if _DB is None:
         return {"logo_data_uri": "", "brand_name": "", "tagline": ""}

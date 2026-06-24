@@ -2,12 +2,14 @@ import "./index.css";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider, useAuth } from "./auth";
 import { BrandingProvider } from "./branding";
+import { AlertsProvider } from "./alerts";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import Streams from "./pages/Streams";
 import Sessions from "./pages/Sessions";
 import Stats from "./pages/Stats";
 import Resellers from "./pages/Resellers";
+import Alerts from "./pages/Alerts";
 import Settings from "./pages/Settings";
 import Layout from "./components/Layout";
 
@@ -21,7 +23,11 @@ function Guard({ children }) {
     );
   }
   if (!user) return <Navigate to="/login" replace />;
-  return <Layout>{children}</Layout>;
+  return (
+    <AlertsProvider enabled={true}>
+      <Layout>{children}</Layout>
+    </AlertsProvider>
+  );
 }
 
 function LoginRoute() {
@@ -42,6 +48,7 @@ export default function App() {
             <Route path="/sessions" element={<Guard><Sessions /></Guard>} />
             <Route path="/stats" element={<Guard><Stats /></Guard>} />
             <Route path="/resellers" element={<Guard><Resellers /></Guard>} />
+            <Route path="/alerts" element={<Guard><Alerts /></Guard>} />
             <Route path="/settings" element={<Guard><Settings /></Guard>} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

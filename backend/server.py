@@ -440,12 +440,46 @@ async def streams_sessions(name: str, user=Depends(get_current_user)):
     return await flussonic.list_sessions_for_stream(name)
 
 @api.get("/sessions")
-async def sessions_list(user=Depends(get_current_user)):
-    return await flussonic.list_sessions()
+async def sessions_list_v2(user=Depends(get_current_user)):
+    sessions = await flussonic.list_sessions()
+    pool = await effective_streams(user)
+    if pool is None:
+        return sessions
+    pool_set = set(pool)
+    return [s for s in sessions if s.get("stream") in pool_set]
 
 @api.get("/stats")
 async def stats(points: int = 30, user=Depends(get_current_user)):
     return await flussonic.get_stats_timeseries(points)
+
+
+# ---------- Alerts ----------
+@api.get("/alerts")
+async def alerts_list(user=Depends(get_current_user)):
+    alerts = await flussonic.refresh_alerts()
+    pool = await effective_streams(user)
+    if pool is None:
+        return alerts
+    pool_set = set(pool)
+    return [a for a in alerts if a.get("stream") in pool_set]
+
+
+@api.post("/alerts/{name}/ack")
+async def alerts_ack(name: str, user=Depends(get_current_user)):
+    pool = await effective_streams(user)
+    if pool is not None and name not in pool:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    flussonic.ack_alert(name)
+    return {"ok": True}
+
+
+@api.delete("/alerts/{name}")
+async def alerts_dismiss(name: str, user=Depends(get_current_user)):
+    pool = await effective_streams(user)
+    if pool is not None and name not in pool:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    flussonic.dismiss_alert(name)
+    return {"ok": True}
 
 
 # ---------- Flussonic connection config ----------

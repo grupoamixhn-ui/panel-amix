@@ -28,7 +28,7 @@ export default function StreamClientsModal({ streamName, onClose }) {
     load();
     const t = setInterval(load, 4000);
     return () => clearInterval(t);
-  }, [streamName]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [streamName, load]);
 
   return (
     <div className="fixed inset-0 z-50 bg-[#0F172A]/40 backdrop-blur-sm flex items-center justify-center p-4" data-testid="stream-clients-modal">
