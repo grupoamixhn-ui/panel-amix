@@ -3,15 +3,13 @@ import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth";
 import { useBranding } from "../branding";
 import api from "../api";
-import { useAlerts } from "../alerts";
 import {
-  Activity, LayoutDashboard, Radio, Users, BarChart3, LogOut, Settings, ShieldCheck, Bell,
+  Activity, LayoutDashboard, Radio, Users, BarChart3, LogOut, Settings, ShieldCheck,
 } from "lucide-react";
 
 const ALL_NAV = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true, tid: "nav-dashboard", roles: ["admin", "reseller", "client"] },
   { to: "/streams", label: "Streams", icon: Radio, tid: "nav-streams", roles: ["admin", "reseller", "client"] },
-  { to: "/alerts", label: "Alerts", icon: Bell, tid: "nav-alerts", roles: ["admin", "reseller"], badge: "alerts" },
   { to: "/sessions", label: "Sessions", icon: Users, tid: "nav-sessions", roles: ["admin", "reseller"] },
   { to: "/stats", label: "Statistics", icon: BarChart3, tid: "nav-stats", roles: ["admin", "reseller"] },
   { to: "/resellers", label: "Resellers", icon: ShieldCheck, tid: "nav-resellers", roles: ["admin", "reseller"] },
@@ -35,8 +33,6 @@ export default function Layout({ children }) {
 
   const isDemo = info?.mode !== "live";
   const navItems = ALL_NAV.filter((n) => n.roles.includes(user?.role || "admin"));
-  const { alerts } = useAlerts();
-  const alertCount = alerts?.length || 0;
 
   return (
     <div className="min-h-screen flex relative z-10">
@@ -59,7 +55,7 @@ export default function Layout({ children }) {
 
         <div className="px-3 pt-4 pb-2 label">Workspace</div>
         <nav className="flex-1 px-3 space-y-0.5">
-          {navItems.map(({ to, label, icon: Icon, end, tid, badge }) => (
+          {navItems.map(({ to, label, icon: Icon, end, tid }) => (
             <NavLink
               key={to}
               to={to}
@@ -74,12 +70,7 @@ export default function Layout({ children }) {
               }
             >
               <Icon className="w-4 h-4" strokeWidth={2} />
-              <span className="flex-1">{label}</span>
-              {badge === "alerts" && alertCount > 0 && (
-                <span data-testid="nav-alerts-badge" className="px-1.5 py-0.5 rounded-full bg-[var(--error)] text-white text-[10px] font-bold leading-none min-w-[18px] text-center">
-                  {alertCount > 99 ? "99+" : alertCount}
-                </span>
-              )}
+              <span>{label}</span>
             </NavLink>
           ))}
         </nav>
