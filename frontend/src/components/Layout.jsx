@@ -4,15 +4,16 @@ import { useAuth } from "../auth";
 import { useBranding } from "../branding";
 import api from "../api";
 import {
-  Activity, LayoutDashboard, Radio, Users, BarChart3, LogOut, Settings,
+  Activity, LayoutDashboard, Radio, Users, BarChart3, LogOut, Settings, ShieldCheck,
 } from "lucide-react";
 
-const navItems = [
-  { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true, tid: "nav-dashboard" },
-  { to: "/streams", label: "Streams", icon: Radio, tid: "nav-streams" },
-  { to: "/sessions", label: "Sessions", icon: Users, tid: "nav-sessions" },
-  { to: "/stats", label: "Statistics", icon: BarChart3, tid: "nav-stats" },
-  { to: "/settings", label: "Settings", icon: Settings, tid: "nav-settings" },
+const ALL_NAV = [
+  { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true, tid: "nav-dashboard", roles: ["admin", "reseller", "client"] },
+  { to: "/streams", label: "Streams", icon: Radio, tid: "nav-streams", roles: ["admin", "reseller", "client"] },
+  { to: "/sessions", label: "Sessions", icon: Users, tid: "nav-sessions", roles: ["admin", "reseller"] },
+  { to: "/stats", label: "Statistics", icon: BarChart3, tid: "nav-stats", roles: ["admin", "reseller"] },
+  { to: "/resellers", label: "Resellers", icon: ShieldCheck, tid: "nav-resellers", roles: ["admin", "reseller"] },
+  { to: "/settings", label: "Settings", icon: Settings, tid: "nav-settings", roles: ["admin"] },
 ];
 
 export default function Layout({ children }) {
@@ -31,6 +32,7 @@ export default function Layout({ children }) {
   }, []);
 
   const isDemo = info?.mode !== "live";
+  const navItems = ALL_NAV.filter((n) => n.roles.includes(user?.role || "admin"));
 
   return (
     <div className="min-h-screen flex relative z-10">
