@@ -1,0 +1,36 @@
+{
+  "summary": "Iteration 2 - Tested Real-time Monitor page + per-stream publish_password feature against live Flussonic at oniptv.pro. All backend tests (3/3) and all targeted frontend flows passed. Verified: (a) Monitor metrics endpoint requires auth, returns cpu_ram_available=false with non-empty source_warning (proxy 404), payload shape correct; (b) PUT publish_password set/clear/title-only-update with special chars persists round-trip via Flussonic v3 fetch-merge-PUT; (c) /streams/{name}/outputs returns publish_password, publish[0].server, publish[0].stream_key with ?password=... suffix; (d) Frontend Monitor page renders all 5 KPI cards + 4 charts + yellow CPU/RAM warning banner + working pause/resume toggle; (e) StreamWizard publish-password input (type=password) with show/hide toggle works and saves; (f) OutputsModal obs-split panel renders Server + Stream Key cards and publish-password-info aviso displays full ?password=<value>.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Monitor", "issues": ["Mixed-language strings: warning banner heading 'CPU / RAM no disponibles' is Spanish while the rest of the app is English ('Real-time Monitor', 'Server health · live', 'blocked by proxy'). Consider localizing consistently."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_monitor_and_publish_password.py",
+    "/app/backend/tests/test_backend.py",
+    "/app/test_reports/pytest/monitor_pw_results.xml"
+  ],
+  "action_items": [
+    "Optional: standardise the locale of the CPU/RAM warning banner in /app/frontend/src/pages/Monitor.jsx (lines 168-172) - currently mixes Spanish and English copy."
+  ],
+  "critical_code_review_comments": [
+    "flussonic.py:393-430 update_stream now fetches /streams/{name}, reads config_on_disk and re-PUTs the merged body. Correct approach for Flussonic v3 which otherwise wipes the config. Verified through round-trip test.",
+    "flussonic.py:734-781 stream_outputs always issues an extra get_stream(name) call to look up publish_password — fine for now, but if streams listing performance ever matters, consider passing the password in via the caller or caching.",
+    "flussonic.py:558-683 get_monitor_metrics has good graceful-degradation logic (tries /server, then /system, /sys, /server/stats; falls back to bandwidth/viewers from /streams). source_warning surfaces the exact 404 reason — UX-friendly.",
+    "server.py:152-161 StreamIn.publish_password accepts only str | None — empty string '' is the documented sentinel for 'clear'. Confirmed working.",
+    "Cookie security: server.py:194-197 still sets secure=False — fine for preview; flag for production."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_monitor_and_publish_password.py"
+  ],
+  "success_rate": {"backend": "100% (3/3 new + 14/14 existing)", "frontend": "100% of in-scope flows"},
+  "test_credentials": "admin@flussonic.io / admin123 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "Used existing live stream 'Tudn' for fixture; teardown restores original title and clears publish_password. Frontend OBS-split test temporarily set publish_password on 'ltvhn' via in-page fetch and cleaned up at the end. Verified post-test: all streams have empty publish_password and original titles.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend currently in LIVE mode (DEMO_MODE=false) pointing to http://oniptv.pro - /server returns 404 (blocked by proxy), /streams works and returns 21 live streams. Use pytest /app/backend/tests/test_monitor_and_publish_password.py -v to retest. New testids verified: monitor-page, monitor-header, monitor-pause-btn, monitor-cpu-warning, kpi-cpu, kpi-mem, kpi-bw, kpi-viewers, kpi-streams, chart-cpu, chart-memory, chart-bandwidth, chart-viewers, monitor-meta, nav-monitor, stream-form-publish-password (type=password), stream-form-pw-toggle (Eye/EyeOff), obs-split, publish-password-info. Stream rows expose stream-edit-{name} (pencil) and stream-outputs-{name} (share).",
+  "rca of the issue": "N/A - no defects found in the features under review."
+}
