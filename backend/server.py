@@ -434,6 +434,9 @@ async def streams_toggle(name: str, body: ToggleIn, user=Depends(get_current_use
 
 @api.post("/streams/{name}/reset")
 async def streams_reset(name: str, user=Depends(get_current_user)):
+    pool = await effective_streams(user)
+    if pool is not None and name not in pool:
+        raise HTTPException(status_code=403, detail="Forbidden")
     s = await flussonic.reset_stream(name)
     if not s:
         raise HTTPException(status_code=404, detail="Stream not found")

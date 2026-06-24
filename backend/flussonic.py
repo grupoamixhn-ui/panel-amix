@@ -500,13 +500,16 @@ async def reset_stream(name: str) -> dict[str, Any] | None:
         merged_off["disabled"] = True
         r1 = await c.put(f"{cfg['api_path']}/streams/{name}", json=merged_off)
         r1.raise_for_status()
-        # 2) Tiny delay so Flussonic actually tears down the input
-        await asyncio.sleep(0.5)
-        # 3) Re-enable to reconnect
-        merged_on = dict(merged)
-        merged_on["disabled"] = False
-        r2 = await c.put(f"{cfg['api_path']}/streams/{name}", json=merged_on)
-        r2.raise_for_status()
+        try:
+            # 2) Tiny delay so Flussonic actually tears down the input
+            await asyncio.sleep(0.5)
+        finally:
+            # 3) Always re-enable, even if the sleep was cancelled or anything
+            # weird happened — we never want to leave the stream stuck disabled.
+            merged_on = dict(merged)
+            merged_on["disabled"] = False
+            r2 = await c.put(f"{cfg['api_path']}/streams/{name}", json=merged_on)
+            r2.raise_for_status()
         g2 = await c.get(f"{cfg['api_path']}/streams/{name}")
         return _normalize_stream(name, g2.json()) if g2.status_code == 200 else None
 

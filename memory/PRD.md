@@ -48,6 +48,7 @@ User wants a web admin panel for the Flussonic Media Server API. Confirmed via c
 - ✅ Stream Wizard (SRT/RTMP/HLS), embedded hls.js preview
 - ✅ Real-time Monitor page (CPU, RAM, Bandwidth in/out, Viewers, Streams) with rolling 60-sample window, 3s refresh, graceful 404 handling for `/server` endpoint blocked by reverse proxy (2026-06-24)
 - ✅ Per-stream RTMP/SRT publish password (Flussonic `password` field). Wizard exposes "Publish password" with show/hide toggle; Outputs modal shows the `?password=` suffix + split Server/Stream Key for OBS. Update flow uses fetch-merge-PUT against Flussonic v3 (2026-06-24)
+- ✅ Reset button per stream (POST /api/streams/{name}/reset) — toggles Flussonic `disabled` False→True→False via fetch-merge-PUT, kicks current viewers and forces source reconnect. RBAC-gated by effective_streams. RotateCw icon button in Streams table with spinner + confirm dialog. Also refactored toggle_stream to use the same disabled-flag approach (the /restart, /stop POST endpoints don't exist in Flussonic 24.02) (2026-06-24)
 
 ## Prioritized Backlog
 **P1 (post-MVP polish)**
