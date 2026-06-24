@@ -77,7 +77,7 @@ export default function Dashboard() {
           <KpiCell icon={Radio} label="Streams live" value={info?.streams_live ?? 0} suffix={`/ ${info?.streams_total ?? 0}`} accent="text-[var(--live)]" testId="kpi-streams-live" />
           <KpiCell icon={Users} label="Active viewers" value={info?.clients ?? 0} trend="+2.4%" testId="kpi-clients" />
           <KpiCell icon={Wifi} label="Total bandwidth" value={fmtBitrate(info?.bandwidth_bps || 0)} testId="kpi-bandwidth" />
-          <KpiCell icon={Clock} label="Uptime" value={fmtUptime(info?.uptime || 0)} hint={`CPU ${info?.cpu ?? 0}% · MEM ${info?.memory ?? 0}%`} testId="kpi-uptime" />
+          <KpiCell icon={Clock} label="Uptime" value={fmtUptime(info?.uptime || 0)} hint={info?.mode === "live" ? "live · auto refresh 5s" : "demo mode"} testId="kpi-uptime" />
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">

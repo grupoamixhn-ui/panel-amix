@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import api, { fmtBitrate } from "../api";
 import PageHeader from "../components/PageHeader";
 import KpiCell from "../components/KpiCell";
 import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { Cpu, MemoryStick, Radio, Wifi } from "lucide-react";
+import { Activity, Radio, Users, Wifi } from "lucide-react";
 
 const TICK = { fill: "#71717A", fontSize: 11, fontFamily: "IBM Plex Mono" };
 
@@ -26,17 +26,20 @@ export default function Stats() {
   const [series, setSeries] = useState([]);
   const [streams, setStreams] = useState([]);
   const [info, setInfo] = useState(null);
+  const [sessionsCount, setSessionsCount] = useState(0);
 
   const load = useCallback(async () => {
     try {
-      const [s, st, i] = await Promise.all([
+      const [s, st, i, ss] = await Promise.all([
         api.get("/stats?points=60"),
         api.get("/streams"),
         api.get("/server/info"),
+        api.get("/sessions").catch(() => ({ data: [] })),
       ]);
       setSeries(s.data.series);
       setStreams(st.data);
       setInfo(i.data);
+      setSessionsCount((ss.data || []).length);
     } catch (e) {
       console.error("stats load failed", e);
     }
@@ -48,6 +51,13 @@ export default function Stats() {
     return () => clearInterval(t);
   }, [load]);
 
+  const liveStreams = info?.streams_live ?? 0;
+  const totalBw = info?.bandwidth_bps ?? 0;
+  const avgBitrate = useMemo(
+    () => (liveStreams > 0 ? Math.round(totalBw / liveStreams) : 0),
+    [liveStreams, totalBw],
+  );
+
   const byStream = [...streams].sort((a, b) => b.clients - a.clients).slice(0, 10);
 
   return (
@@ -56,10 +66,10 @@ export default function Stats() {
 
       <div className="p-8 space-y-6">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <KpiCell icon={Cpu} label="CPU" value={`${info?.cpu ?? 0}%`} testId="stat-cpu" />
-          <KpiCell icon={MemoryStick} label="Memory" value={`${info?.memory ?? 0}%`} testId="stat-mem" />
-          <KpiCell icon={Radio} label="Streams" value={info?.streams_total ?? 0} suffix={`${info?.streams_live ?? 0} live`} testId="stat-streams" />
-          <KpiCell icon={Wifi} label="Out bandwidth" value={fmtBitrate(info?.bandwidth_bps || 0)} testId="stat-bw" />
+          <KpiCell icon={Radio} label="Streams" value={info?.streams_total ?? 0} suffix={`${liveStreams} live`} testId="stat-streams" />
+          <KpiCell icon={Users} label="Active viewers" value={info?.clients ?? 0} hint={`${sessionsCount} sessions`} testId="stat-viewers" />
+          <KpiCell icon={Wifi} label="Out bandwidth" value={fmtBitrate(totalBw)} testId="stat-bw" />
+          <KpiCell icon={Activity} label="Avg bitrate / stream" value={fmtBitrate(avgBitrate)} hint={liveStreams > 0 ? `across ${liveStreams} live` : "no live streams"} testId="stat-avg-bitrate" />
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
