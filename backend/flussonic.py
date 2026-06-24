@@ -14,12 +14,16 @@ Real mode wraps a small subset of Flussonic's HTTP Admin API (v3):
 from __future__ import annotations
 
 import os
-import random
+import secrets
 import time
 from datetime import datetime, timezone, timedelta
 from typing import Any
 
 import httpx
+
+# Cryptographically-secure RNG (used even for demo data per security review)
+_rng = secrets.SystemRandom()
+random = _rng  # alias so existing call sites stay readable
 
 # In-memory mock database (persists for the process lifetime in demo mode)
 _MOCK_STREAMS: dict[str, dict[str, Any]] = {}

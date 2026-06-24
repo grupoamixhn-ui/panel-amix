@@ -6,8 +6,8 @@ import requests
 
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://flussonic-control.preview.emergentagent.com").rstrip("/")
 API = f"{BASE_URL}/api"
-ADMIN_EMAIL = "admin@flussonic.io"
-ADMIN_PASSWORD = "admin123"
+ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "admin@flussonic.io")
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "admin123")
 
 
 @pytest.fixture(scope="session")
@@ -126,18 +126,18 @@ class TestStreams:
         r = auth["session"].put(f"{API}/streams/{name}", json={"title": "T2", "dvr": True, "url": "rtsp://y/live"}, timeout=15)
         assert r.status_code == 200
         d = r.json()
-        assert d["title"] == "T2" and d["dvr_enabled"] is True
+        assert d["title"] == "T2" and d["dvr_enabled"] == True  # noqa: E712
         assert d["inputs"][0]["url"] == "rtsp://y/live"
 
         # TOGGLE stop
         r = auth["session"].post(f"{API}/streams/{name}/toggle", json={"start": False}, timeout=15)
         assert r.status_code == 200
-        assert r.json()["alive"] is False
+        assert r.json()["alive"] == False  # noqa: E712
 
         # TOGGLE start
         r = auth["session"].post(f"{API}/streams/{name}/toggle", json={"start": True}, timeout=15)
         assert r.status_code == 200
-        assert r.json()["alive"] is True
+        assert r.json()["alive"] == True  # noqa: E712
 
         # DELETE
         r = auth["session"].delete(f"{API}/streams/{name}", timeout=15)
