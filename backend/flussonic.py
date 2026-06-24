@@ -19,6 +19,7 @@ Real mode wraps Flussonic's HTTP Admin API (v3):
 from __future__ import annotations
 
 import os
+import asyncio
 import secrets
 import time
 from datetime import datetime, timezone, timedelta
@@ -458,12 +459,56 @@ async def toggle_stream(name: str, start: bool) -> dict[str, Any] | None:
         return s
     cfg = await _active_config()
     async with _make_client(cfg) as c:
-        path = "restart" if start else "stop"
-        r = await c.post(f"{cfg['api_path']}/streams/{name}/{path}")
-        r.raise_for_status()
-        # Re-fetch to return up-to-date data
+        # Flussonic 24.02 exposes only GET/PUT/DELETE on the streams resource — no
+        # /start /stop /restart action endpoints. Toggle by updating the `disabled`
+        # flag via fetch-merge-PUT instead.
         g = await c.get(f"{cfg['api_path']}/streams/{name}")
-        return _normalize_stream(name, g.json()) if g.status_code == 200 else None
+        if g.status_code >= 400:
+            return None
+        merged = dict((g.json() or {}).get("config_on_disk") or {})
+        merged.setdefault("name", name)
+        merged["disabled"] = not start
+        r = await c.put(f"{cfg['api_path']}/streams/{name}", json=merged)
+        r.raise_for_status()
+        g2 = await c.get(f"{cfg['api_path']}/streams/{name}")
+        return _normalize_stream(name, g2.json()) if g2.status_code == 200 else None
+
+
+async def reset_stream(name: str) -> dict[str, Any] | None:
+    """Restart a stream by toggling ``disabled`` off→on. Kicks current viewers
+    and forces Flussonic to reconnect to the source."""
+    if await _is_demo():
+        _seed_mock()
+        s = _MOCK_STREAMS.get(name)
+        if not s:
+            return None
+        s["alive"] = True
+        s["status"] = "running"
+        s["bitrate"] = random.randint(2_000_000, 6_000_000)
+        s["clients"] = 0
+        _log("info", f"Stream {name} reset", name)
+        return s
+    cfg = await _active_config()
+    async with _make_client(cfg) as c:
+        g = await c.get(f"{cfg['api_path']}/streams/{name}")
+        if g.status_code >= 400:
+            return None
+        merged = dict((g.json() or {}).get("config_on_disk") or {})
+        merged.setdefault("name", name)
+        # 1) Disable to drop current ingest + viewers
+        merged_off = dict(merged)
+        merged_off["disabled"] = True
+        r1 = await c.put(f"{cfg['api_path']}/streams/{name}", json=merged_off)
+        r1.raise_for_status()
+        # 2) Tiny delay so Flussonic actually tears down the input
+        await asyncio.sleep(0.5)
+        # 3) Re-enable to reconnect
+        merged_on = dict(merged)
+        merged_on["disabled"] = False
+        r2 = await c.put(f"{cfg['api_path']}/streams/{name}", json=merged_on)
+        r2.raise_for_status()
+        g2 = await c.get(f"{cfg['api_path']}/streams/{name}")
+        return _normalize_stream(name, g2.json()) if g2.status_code == 200 else None
 
 
 async def list_sessions() -> list[dict[str, Any]]:

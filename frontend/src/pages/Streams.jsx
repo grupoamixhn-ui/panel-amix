@@ -4,7 +4,7 @@ import PageHeader from "../components/PageHeader";
 import StreamWizard from "../components/StreamWizard";
 import OutputsModal from "../components/OutputsModal";
 import StreamClientsModal from "../components/StreamClientsModal";
-import { Plus, Play, Pause, Trash2, Share2, Search, Pencil, Users } from "lucide-react";
+import { Plus, Play, Pause, Trash2, Share2, Search, Pencil, Users, RotateCw } from "lucide-react";
 
 function statusPill(s) {
   if (s.alive) return <span className="pill pill-live"><span className="dot dot-live" />Live</span>;
@@ -19,6 +19,7 @@ export default function Streams() {
   const [editing, setEditing] = useState(null);
   const [outputsFor, setOutputsFor] = useState(null);
   const [clientsFor, setClientsFor] = useState(null);
+  const [resetting, setResetting] = useState({});  // {streamName: true}
 
   const load = useCallback(async () => {
     try {
@@ -44,6 +45,21 @@ export default function Streams() {
     if (!window.confirm(`Delete stream "${name}"?`)) return;
     await api.delete(`/streams/${name}`);
     load();
+  };
+
+  const reset = async (name) => {
+    if (!window.confirm(`Reset stream "${name}"?\n\nThis will disconnect current viewers and force Flussonic to reconnect to the source.`)) return;
+    setResetting((r) => ({ ...r, [name]: true }));
+    try {
+      await api.post(`/streams/${name}/reset`);
+      // Small delay so Flussonic surfaces fresh state
+      setTimeout(load, 1200);
+    } catch (e) {
+      console.error("reset failed", e);
+      window.alert(`Failed to reset "${name}": ${e?.response?.data?.detail || e.message}`);
+    } finally {
+      setResetting((r) => { const n = { ...r }; delete n[name]; return n; });
+    }
   };
 
   const filtered = streams.filter((s) =>
@@ -146,6 +162,15 @@ export default function Streams() {
                           data-testid={`stream-toggle-${s.name}`}
                         >
                           {s.alive ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
+                        </button>
+                        <button
+                          onClick={() => reset(s.name)}
+                          disabled={!!resetting[s.name]}
+                          className="btn-icon"
+                          title="Reset (kick viewers + reconnect source)"
+                          data-testid={`stream-reset-${s.name}`}
+                        >
+                          <RotateCw className={`w-3.5 h-3.5 ${resetting[s.name] ? "animate-spin" : ""}`} />
                         </button>
                         <button
                           onClick={() => { setEditing(s); setWizardOpen(true); }}

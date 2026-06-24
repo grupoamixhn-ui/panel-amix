@@ -432,6 +432,14 @@ async def streams_toggle(name: str, body: ToggleIn, user=Depends(get_current_use
     return s
 
 
+@api.post("/streams/{name}/reset")
+async def streams_reset(name: str, user=Depends(get_current_user)):
+    s = await flussonic.reset_stream(name)
+    if not s:
+        raise HTTPException(status_code=404, detail="Stream not found")
+    return s
+
+
 @api.get("/streams/{name}/outputs")
 async def streams_outputs(name: str, user=Depends(get_current_user)):
     return await flussonic.stream_outputs(name)

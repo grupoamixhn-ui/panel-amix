@@ -1,0 +1,31 @@
+{
+  "summary": "Iteration 3 — Verified the new POST /api/streams/{name}/reset endpoint + RotateCw Reset button in the Streams table. Backend: 7/7 pytest tests pass against the live Flussonic at oniptv.pro (auth, 404, 200+stream object, uptime<60 + clients=0 after reset, disabled=False post-reset, publish_password + title preserved across the off→on toggle, and a regression for /streams/{name}/toggle leaving the stream enabled). Frontend: Playwright validated button placement (toggle→reset→edit-icon), data-testid stream-reset-{name}, RotateCw lucide icon, window.confirm copy 'Reset stream … will disconnect current viewers and force Flussonic to reconnect to the source', no error alert raised, and the row re-loads via the 1.2s setTimeout. No defects found.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_stream_reset.py",
+    "/app/test_reports/pytest/reset_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "flussonic.py:477-511 reset_stream fetches /streams/{name}, takes config_on_disk as the merge base, PUTs disabled=True, sleeps 0.5s, then PUTs disabled=False — correct given Flussonic 24.02's lack of /restart action. Risk: if the second PUT fails after the first succeeds, the stream is left disabled. Consider wrapping in try/finally that always issues a re-enable PUT, and/or returning a meaningful 502 instead of letting raise_for_status() bubble to a generic 500. Currently the panel relies on the user re-clicking, which is acceptable but worth logging.",
+    "flussonic.py:448-474 toggle_stream now uses the same fetch-merge-PUT disabled pattern. Verified: title + publish_password are preserved because the merge copies the full config_on_disk dict before only mutating 'disabled'. Good.",
+    "server.py:435-440 streams_reset has no role/scope check. Sub-users (resellers/clients) with streams_allowed restrictions can currently reset streams outside their pool because /streams/{name}/reset doesn't run the same `effective_streams` gate that /streams/{name} GET does. Recommendation: mirror the gate from streams_get (lines 405-407). Low severity for the admin-only setup today but should be tightened before exposing sub-users.",
+    "Streams.jsx:50-63 reset() correctly uses window.confirm + try/finally to always clear the resetting state. The 1.2s setTimeout(load) is reasonable but slightly racy on slow upstream switches — the existing 5s polling interval covers it.",
+    "Streams.jsx:166-174 The RotateCw button is properly disabled while resetting and the spinner uses Tailwind animate-spin — verified the class toggles in DOM during the in-flight request."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_stream_reset.py"
+  ],
+  "success_rate": {"backend": "100% (7/7)", "frontend": "100% of in-scope flows"},
+  "test_credentials": "admin@flussonic.io / admin123 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "test_reset_preserves_password_and_title temporarily set publish_password='TEST_resetpw_xyz!@#' on SkySportsLiga, then restored the original empty password and original title in a finally block. Confirmed post-test: stream config back to original state. No other state mutated.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend is in LIVE mode against http://oniptv.pro (21 streams). New endpoint: POST /api/streams/{name}/reset. The pytest at /app/backend/tests/test_stream_reset.py is the canonical regression for this feature plus the toggle rewrite. Re-run with: pytest /app/backend/tests/test_stream_reset.py -v. Frontend testid: stream-reset-{name} on each row in Streams table; button uses RotateCw + animate-spin during in-flight. Browser-level window.confirm is shown — Playwright must register page.on('dialog', ...) before clicking. Known not-yet-tightened: streams_reset endpoint does not enforce effective_streams scope — flagged in critical_code_review_comments.",
+  "rca of the issue": "N/A — feature working as designed; only forward-looking hardening suggestions raised in critical_code_review_comments."
+}
