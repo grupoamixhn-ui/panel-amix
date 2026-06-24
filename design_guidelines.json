@@ -1,0 +1,79 @@
+{
+  "project_name": "Flussonic NOC Admin Panel",
+  "theme": "dark",
+  "archetype": "2 (Performance Pro / Tech Command Center)",
+  "emotion": "Reliable, authoritative, precise, highly technical",
+  "colors": {
+    "background": "#0A0A0A",
+    "surface": "#141414",
+    "surface_hover": "#1E1E1E",
+    "border": "#27272A",
+    "primary": "#007AFF",
+    "primary_hover": "#005BB5",
+    "text_primary": "#FFFFFF",
+    "text_secondary": "#A1A1AA",
+    "status": {
+      "live": "#22C55E",
+      "error": "#EF4444",
+      "warning": "#F59E0B",
+      "offline": "#71717A"
+    }
+  },
+  "typography": {
+    "font_family_headings": "IBM Plex Sans, sans-serif",
+    "font_family_body": "Inter, sans-serif",
+    "font_family_mono": "IBM Plex Mono, monospace",
+    "sizes": {
+      "h1": "text-3xl sm:text-4xl tracking-tight font-bold",
+      "h2": "text-xl sm:text-2xl tracking-tight font-semibold",
+      "h3": "text-lg sm:text-xl font-medium",
+      "body": "text-sm",
+      "mono_data": "text-sm font-mono tracking-tight",
+      "label": "text-xs uppercase tracking-[0.2em] font-medium text-text_secondary"
+    }
+  },
+  "layout": {
+    "spacing_system": "Tight spacing for density. p-4 to p-6 for containers. gap-4 to gap-6 for grids.",
+    "grid_strategy": "Control Room Grid (Mode B). grid-cols-1 md:grid-cols-3 lg:grid-cols-4. Use h-full on children.",
+    "container_styles": "Flat backgrounds, 1px subtle border (#27272A), no shadow by default. Sharp edges (rounded-sm or rounded-none)."
+  },
+  "components": {
+    "buttons": "Sharp corners (rounded-sm), high contrast. Primary: bg-primary text-white hover:bg-primary_hover. Include data-testid.",
+    "cards": "Cardless or flat rectangular. 1px border. Deep background. Metric values in IBM Plex Mono.",
+    "tables": "Dense rows, monospace font for IPs and bitrates, left-aligned data, sticky headers.",
+    "charts": "Recharts with dark theme. Grid lines #27272A. Tooltips #141414 bg with 1px border.",
+    "logs": "Terminal-style viewer. bg-[#0A0A0A], font-mono text-xs, color-coded log levels.",
+    "navigation": "Left sidebar or dense top-nav. Use Phosphor Icons for a technical look."
+  },
+  "motion": {
+    "transitions": "Fast and precise. transition-all duration-150 ease-in-out.",
+    "hover_states": "Slight border highlight or background lighten. No bouncy animations."
+  },
+  "icons": {
+    "library": "@phosphor-icons/react",
+    "style": "Regular or Duotone weight. Clean, technical."
+  },
+  "media": {
+    "images": [
+      {
+        "url": "https://images.pexels.com/photos/17323801/pexels-photo-17323801.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "category": "auth_background",
+        "description": "Modern server room with blue network lights for the login page background."
+      },
+      {
+        "url": "https://images.pexels.com/photos/10325707/pexels-photo-10325707.png?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "category": "empty_state",
+        "description": "Abstract data network for empty states or placeholder charts."
+      },
+      {
+        "url": "https://images.pexels.com/photos/3855644/pexels-photo-3855644.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "category": "avatar",
+        "description": "Engineer portrait for the user profile."
+      }
+    ]
+  },
+  "testing": {
+    "rules": "All interactive elements MUST have data-testid attributes (e.g., data-testid='login-submit-button', data-testid='stream-row-delete')."
+  },
+  "instructions_to_main_agent": "Implement a dense, NOC-style dark dashboard. Use standard HTML/Tailwind structures heavily utilizing grid for the control-room layout. Do not use excessive card padding. Data must be front and center. Install @phosphor-icons/react and recharts. Use IBM Plex Mono for all numeric metrics, IPs, and bandwidth data."
+}
