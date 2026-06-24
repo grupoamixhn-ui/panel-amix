@@ -1,55 +1,248 @@
 import { useEffect, useState } from "react";
 import api from "../api";
 import PageHeader from "../components/PageHeader";
-import { Zap, Cable } from "lucide-react";
+import { Zap, Cable, CheckCircle2, XCircle, Loader2, Trash2 } from "lucide-react";
 
 export default function Settings() {
   const [info, setInfo] = useState(null);
-  useEffect(() => {
-    api.get("/server/info")
-      .then((r) => setInfo(r.data))
-      .catch((e) => console.error("settings load failed", e));
-  }, []);
+  const [cfg, setCfg] = useState(null);          // current persisted config
+  const [form, setForm] = useState({ url: "", user: "", password: "", demo_mode: false });
+  const [touched, setTouched] = useState(false); // whether the user edited the form
+  const [testing, setTesting] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [testResult, setTestResult] = useState(null); // {ok, error?, version?}
+  const [savedFlash, setSavedFlash] = useState(false);
+
+  const loadAll = async () => {
+    const [i, c] = await Promise.all([
+      api.get("/server/info").catch(() => ({ data: null })),
+      api.get("/config/flussonic").catch(() => ({ data: null })),
+    ]);
+    setInfo(i.data);
+    if (c.data) {
+      setCfg(c.data);
+      setForm({
+        url: c.data.url || "",
+        user: c.data.user || "",
+        password: "", // never pre-fill the password
+        demo_mode: !!c.data.demo_mode,
+      });
+    }
+  };
+
+  useEffect(() => { loadAll().catch((e) => console.error(e)); }, []);
+
+  const onField = (k, v) => { setForm((f) => ({ ...f, [k]: v })); setTouched(true); setTestResult(null); };
+
+  const test = async () => {
+    setTesting(true); setTestResult(null);
+    try {
+      const { data } = await api.post("/config/flussonic/test", {
+        url: form.url, user: form.user, password: form.password,
+      });
+      setTestResult(data);
+    } catch (e) {
+      setTestResult({ ok: false, error: e.response?.data?.detail || e.message });
+    } finally { setTesting(false); }
+  };
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      const body = {
+        url: form.url,
+        user: form.user,
+        demo_mode: form.demo_mode,
+        // If the user left password empty AND we are editing an existing config with stored password,
+        // send `null` to keep the existing one. If they cleared it intentionally with a clean URL, send "".
+        password: form.password === "" && cfg?.has_password ? null : form.password,
+      };
+      await api.put("/config/flussonic", body);
+      setSavedFlash(true);
+      setTouched(false);
+      setTimeout(() => setSavedFlash(false), 2500);
+      await loadAll();
+    } catch (e) {
+      console.error("save config failed", e);
+      alert(e.response?.data?.detail || "Save failed");
+    } finally { setSaving(false); }
+  };
+
+  const reset = async () => {
+    if (!window.confirm("Clear stored Flussonic config and return to DEMO mode?")) return;
+    await api.post("/config/flussonic/clear");
+    await loadAll();
+    setForm({ url: "", user: "", password: "", demo_mode: false });
+    setTestResult(null);
+    setTouched(false);
+  };
+
+  const isLive = info?.mode === "live";
 
   return (
     <div data-testid="settings-page">
-      <PageHeader title="Settings" subtitle="Server & integration" testId="settings-header" />
+      <PageHeader
+        title="Settings"
+        subtitle="Server & integration"
+        testId="settings-header"
+        right={
+          <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full border ${
+            isLive ? "bg-[var(--live-soft)] border-[#BBF7D0] text-[#15803D]"
+                   : "bg-[var(--warn-soft)] border-[#FDE68A] text-[#B45309]"
+          }`}>
+            <span className={`dot ${isLive ? "dot-live" : "dot-warn"}`} />
+            <span className="text-xs font-semibold">{isLive ? "LIVE" : "DEMO"} · {info?.version || "—"}</span>
+          </div>
+        }
+      />
 
       <div className="p-8 space-y-6 max-w-3xl">
+        {/* Connection form */}
         <div className="cell p-6" data-testid="settings-connection">
-          <div className="flex items-center gap-3 mb-4">
+          <div className="flex items-center gap-3 mb-5">
             <div className="w-9 h-9 rounded-xl bg-[var(--primary-soft)] flex items-center justify-center">
               <Cable className="w-4.5 h-4.5 text-[var(--primary)]" />
             </div>
-            <div>
-              <div className="font-semibold text-sm">Flussonic connection</div>
-              <div className="text-xs text-[var(--muted)]">Switch between demo and live mode</div>
+            <div className="flex-1">
+              <div className="font-semibold text-sm">Connect your Flussonic server</div>
+              <div className="text-xs text-[var(--muted)]">
+                The backend will proxy admin calls to <span className="mono">/streamer/api/v3</span> on this server.
+              </div>
             </div>
           </div>
 
-          <div className="space-y-0">
-            <Row k="Mode" v={info?.mode === "demo" ? "DEMO · mock data" : "LIVE"} accent={info?.mode === "demo" ? "text-[var(--warn)]" : "text-[var(--live)]"} />
-            <Row k="Version" v={info?.version || "—"} mono />
-            <Row k="Backend env keys" v="DEMO_MODE · FLUSSONIC_URL · FLUSSONIC_USER · FLUSSONIC_PASS" mono />
+          <label className="text-xs font-medium text-[var(--text-2)] block mb-1.5">Server URL</label>
+          <input
+            data-testid="config-url-input"
+            value={form.url}
+            onChange={(e) => onField("url", e.target.value)}
+            placeholder="http://your-flussonic.example.com or http://1.2.3.4:80"
+            className="w-full px-3.5 py-2.5 text-sm mono mb-4"
+          />
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="text-xs font-medium text-[var(--text-2)] block mb-1.5">Username</label>
+              <input
+                data-testid="config-user-input"
+                value={form.user}
+                onChange={(e) => onField("user", e.target.value)}
+                placeholder="admin"
+                className="w-full px-3.5 py-2.5 text-sm mono"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-[var(--text-2)] block mb-1.5">
+                Password / API token
+                {cfg?.has_password && form.password === "" && (
+                  <span className="ml-2 text-[10px] text-[var(--muted)] font-normal">(saved · leave empty to keep)</span>
+                )}
+              </label>
+              <input
+                data-testid="config-password-input"
+                type="password"
+                value={form.password}
+                onChange={(e) => onField("password", e.target.value)}
+                placeholder={cfg?.has_password ? "•••••••• (stored)" : "password or ADM-xxxxxx"}
+                className="w-full px-3.5 py-2.5 text-sm mono"
+              />
+            </div>
           </div>
 
-          <p className="mt-5 text-xs text-[var(--muted)] leading-relaxed">
-            To connect a real Flussonic Media Server, edit <span className="mono text-[var(--text)] bg-[var(--surface-2)] px-1.5 py-0.5 rounded">/app/backend/.env</span>,
-            set <span className="mono text-[var(--text)] bg-[var(--surface-2)] px-1.5 py-0.5 rounded">DEMO_MODE=&quot;false&quot;</span>, fill in <span className="mono text-[var(--text)] bg-[var(--surface-2)] px-1.5 py-0.5 rounded">FLUSSONIC_URL</span>, <span className="mono text-[var(--text)] bg-[var(--surface-2)] px-1.5 py-0.5 rounded">FLUSSONIC_USER</span> and <span className="mono text-[var(--text)] bg-[var(--surface-2)] px-1.5 py-0.5 rounded">FLUSSONIC_PASS</span>,
-            then restart the backend. The panel will proxy calls to <span className="mono text-[var(--text)] bg-[var(--surface-2)] px-1.5 py-0.5 rounded">/streamer/api/v3</span>.
-          </p>
+          <label className="flex items-center gap-2.5 mt-5 text-sm cursor-pointer select-none" data-testid="config-demo-toggle">
+            <input
+              type="checkbox"
+              checked={form.demo_mode}
+              onChange={(e) => onField("demo_mode", e.target.checked)}
+              className="w-4 h-4 accent-[var(--primary)]"
+            />
+            <span>
+              Demo mode (ignore real server and show mock data)
+              <span className="block text-xs text-[var(--muted)]">Useful while you set up the server or troubleshoot.</span>
+            </span>
+          </label>
+
+          {/* Test result */}
+          {testResult && (
+            <div
+              data-testid="config-test-result"
+              className={`mt-5 flex items-start gap-3 px-4 py-3 rounded-lg border ${
+                testResult.ok
+                  ? "bg-[var(--live-soft)] border-[#BBF7D0] text-[#15803D]"
+                  : "bg-[var(--error-soft)] border-[#FECACA] text-[var(--error)]"
+              }`}
+            >
+              {testResult.ok ? <CheckCircle2 className="w-4 h-4 mt-0.5" /> : <XCircle className="w-4 h-4 mt-0.5" />}
+              <div className="text-xs">
+                <div className="font-semibold">
+                  {testResult.ok ? "Connection OK" : "Connection failed"}
+                </div>
+                <div className="mono mt-0.5 break-all">
+                  {testResult.ok ? `Flussonic ${testResult.version}` : testResult.error}
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="mt-6 flex items-center justify-between gap-3 flex-wrap">
+            <button
+              type="button"
+              data-testid="config-reset-button"
+              onClick={reset}
+              className="btn btn-ghost text-[var(--error)] hover:border-[var(--error)]"
+            >
+              <Trash2 className="w-3.5 h-3.5" /> Clear & reset
+            </button>
+
+            <div className="flex items-center gap-3">
+              {savedFlash && <span className="text-xs text-[var(--live)] font-medium" data-testid="config-saved-flash">Saved ✓</span>}
+              <button
+                type="button"
+                data-testid="config-test-button"
+                onClick={test}
+                disabled={testing || !form.url}
+                className="btn btn-ghost disabled:opacity-50"
+              >
+                {testing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5" />}
+                Test connection
+              </button>
+              <button
+                type="button"
+                data-testid="config-save-button"
+                onClick={save}
+                disabled={saving || (!touched && !savedFlash)}
+                className="btn btn-primary disabled:opacity-50"
+              >
+                {saving ? "Saving…" : "Save & apply"}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Quick references */}
+        <div className="cell p-6" data-testid="settings-help">
+          <div className="font-semibold text-sm mb-3">Source URL examples</div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+            {[
+              ["RTMP pull", "rtmp://origin.example/live/key"],
+              ["RTMP receive", "publish://"],
+              ["SRT pull", "srt://origin.example:9000?streamid=name"],
+              ["SRT listener", "publish://srt-listener:9000"],
+              ["HLS pull", "hls://origin.example/playlist.m3u8"],
+              ["UDP / RTP", "udp://239.0.0.10:1234"],
+              ["RTSP camera", "rtsp://192.168.1.10:554/live"],
+              ["MP4 file", "file:///storage/movies/loop.mp4"],
+            ].map(([k, v]) => (
+              <div key={k} className="flex items-center justify-between gap-3 px-3 py-2 rounded-lg bg-[var(--surface-2)] border border-[var(--border)]">
+                <span className="font-medium text-[var(--text-2)]">{k}</span>
+                <span className="mono text-[var(--muted)] text-[11px] truncate">{v}</span>
+              </div>
+            ))}
+          </div>
         </div>
 
         <div className="cell p-6" data-testid="settings-api">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-9 h-9 rounded-xl bg-[var(--primary-soft)] flex items-center justify-center">
-              <Zap className="w-4.5 h-4.5 text-[var(--primary)]" />
-            </div>
-            <div>
-              <div className="font-semibold text-sm">Supported API surface</div>
-              <div className="text-xs text-[var(--muted)]">Flussonic v3 admin endpoints proxied by this panel</div>
-            </div>
-          </div>
+          <div className="font-semibold text-sm mb-3">Supported Flussonic v3 endpoints (proxied)</div>
           <ul className="space-y-1.5 mono text-xs">
             {[
               ["GET", "/streamer/api/v3/server"],
@@ -57,25 +250,22 @@ export default function Settings() {
               ["PUT", "/streamer/api/v3/streams/{name}"],
               ["DELETE", "/streamer/api/v3/streams/{name}"],
               ["POST", "/streamer/api/v3/streams/{name}/restart"],
+              ["POST", "/streamer/api/v3/streams/{name}/stop"],
               ["GET", "/streamer/api/v3/sessions"],
             ].map(([m, p]) => (
               <li key={p} className="flex items-center gap-3 py-1.5 border-b border-[var(--border)] last:border-0">
-                <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${m === "GET" ? "bg-blue-50 text-blue-700" : m === "POST" ? "bg-emerald-50 text-emerald-700" : m === "PUT" ? "bg-amber-50 text-amber-700" : "bg-red-50 text-red-700"}`}>{m}</span>
+                <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
+                  m === "GET" ? "bg-blue-50 text-blue-700"
+                  : m === "POST" ? "bg-emerald-50 text-emerald-700"
+                  : m === "PUT" ? "bg-amber-50 text-amber-700"
+                  : "bg-red-50 text-red-700"
+                }`}>{m}</span>
                 <span className="text-[var(--text-2)]">{p}</span>
               </li>
             ))}
           </ul>
         </div>
       </div>
-    </div>
-  );
-}
-
-function Row({ k, v, accent, mono }) {
-  return (
-    <div className="flex items-center justify-between border-b border-[var(--border)] py-3 last:border-0">
-      <span className="text-sm text-[var(--muted)]">{k}</span>
-      <span className={`text-sm ${mono ? "mono" : ""} ${accent || "text-[var(--text)] font-medium"}`}>{v}</span>
     </div>
   );
 }

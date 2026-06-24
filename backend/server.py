@@ -103,6 +103,19 @@ class ToggleIn(BaseModel):
     start: bool
 
 
+class FlussonicConfigIn(BaseModel):
+    url: str = ""
+    user: str = ""
+    password: str | None = None  # None = keep existing
+    demo_mode: bool = False
+
+
+class FlussonicTestIn(BaseModel):
+    url: str
+    user: str = ""
+    password: str = ""
+
+
 # ---------- Auth endpoints ----------
 @api.post("/auth/login")
 async def login(body: LoginIn, response: Response):
@@ -190,6 +203,37 @@ async def logs_list(limit: int = 100, user=Depends(get_current_user)):
     return await flussonic.list_logs(limit)
 
 
+# ---------- Flussonic connection config ----------
+@api.get("/config/flussonic")
+async def config_get(user=Depends(get_current_user)):
+    return await flussonic.get_public_config()
+
+
+@api.put("/config/flussonic")
+async def config_put(body: FlussonicConfigIn, user=Depends(get_current_user)):
+    await flussonic.save_config(
+        url=body.url, user=body.user, password=body.password, demo_mode=body.demo_mode,
+    )
+    return await flussonic.get_public_config()
+
+
+@api.post("/config/flussonic/test")
+async def config_test(body: FlussonicTestIn, user=Depends(get_current_user)):
+    # If password is empty, fall back to stored password (so "Test" works without re-typing)
+    pwd = body.password
+    if not pwd:
+        cur = await flussonic._active_config()  # noqa: SLF001
+        if body.url.rstrip("/") == cur["url"].rstrip("/") and body.user == cur.get("user", ""):
+            pwd = cur.get("password", "")
+    return await flussonic.test_connection(url=body.url, user=body.user, password=pwd or "")
+
+
+@api.post("/config/flussonic/clear")
+async def config_clear(user=Depends(get_current_user)):
+    await flussonic.clear_config()
+    return await flussonic.get_public_config()
+
+
 @api.get("/")
 async def root():
     return {"service": "flussonic-admin-api", "status": "ok"}
@@ -208,6 +252,7 @@ app.add_middleware(
 # ---------- Startup ----------
 @app.on_event("startup")
 async def on_startup():
+    flussonic.set_db(db)
     await db.users.create_index("email", unique=True)
     admin_email = os.environ.get("ADMIN_EMAIL", "admin@flussonic.local").lower()
     admin_password = os.environ.get("ADMIN_PASSWORD", "admin123")
