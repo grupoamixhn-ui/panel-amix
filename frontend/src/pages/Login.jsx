@@ -40,8 +40,8 @@ export default function Login() {
             )}
           </div>
 
-          <h2 className="text-3xl font-semibold tracking-tight mb-1">GRUPO AMIX HN</h2>
-          <p className="text-sm text-[var(--muted)] mb-10">&nbsp;</p>
+          <h2 className="text-3xl font-semibold tracking-tight mb-1" data-testid="login-title">{displayBrand}</h2>
+          <p className="text-sm text-[var(--muted)] mb-10">{displayTagline}</p>
 
           <label className="text-xs font-medium text-[var(--text-2)] block mb-1.5">Email</label>
           <input

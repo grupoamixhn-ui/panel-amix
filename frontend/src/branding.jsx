@@ -20,6 +20,23 @@ function applyBrandColors({ primary_color, primary_hover, primary_soft }) {
   else root.style.removeProperty("--primary-soft");
 }
 
+// Update the browser-tab favicon + document title from the uploaded brand
+// assets, so the deployed panel can be re-skinned without rebuilding the app.
+function applyBrandTab({ logo_data_uri, brand_name, tagline }) {
+  const name = (brand_name || "").trim() || "Flussonic Admin";
+  document.title = tagline ? `${name} · ${tagline}` : name;
+
+  if (!logo_data_uri) return;
+  // Remove any pre-existing icon links so the new one wins
+  document.querySelectorAll('link[rel~="icon"], link[rel="shortcut icon"], link[rel="apple-touch-icon"]')
+    .forEach((el) => el.parentNode && el.parentNode.removeChild(el));
+  const link = document.createElement("link");
+  link.rel = "icon";
+  link.type = logo_data_uri.startsWith("data:image/svg") ? "image/svg+xml" : "image/png";
+  link.href = logo_data_uri;
+  document.head.appendChild(link);
+}
+
 export function BrandingProvider({ children }) {
   const [brand, setBrand] = useState(EMPTY);
 
@@ -29,6 +46,7 @@ export function BrandingProvider({ children }) {
       const next = { ...EMPTY, ...(r.data || {}) };
       setBrand(next);
       applyBrandColors(next);
+      applyBrandTab(next);
     } catch {
       /* ignore */
     }
