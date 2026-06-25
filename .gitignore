@@ -99,3 +99,9 @@ next-env.d.ts
 memory/scratch/
 frontend/node_modules/.cache/default-development/12.pack
 frontend/node_modules/.cache/default-development/6.pack
+.env
+.env.*
+*.env
+credentials.json
+*.key
+.credentials

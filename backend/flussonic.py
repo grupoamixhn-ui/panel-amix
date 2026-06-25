@@ -800,3 +800,116 @@ async def stream_outputs(name: str) -> dict[str, Any]:
         "publish_password": publish_password,
         "host": host,
     }
+
+
+
+# ---------- VOD (Video On Demand) ----------
+async def list_vod_locations() -> list[dict[str, Any]]:
+    """Return configured VOD locations from Flussonic.
+    Each entry: {name, storage, urlprefix?, raw}.
+    """
+    cfg = await _active_config()
+    if not cfg["url"]:
+        return []
+    async with _make_client(cfg) as c:
+        # v3 endpoint
+        try:
+            r = await c.get(f"{cfg['api_path']}/vods")
+        except httpx.HTTPError:
+            return []
+        if r.status_code == 404:
+            # try legacy
+            try:
+                r = await c.get(f"{cfg['api_path']}/file_locations")
+            except httpx.HTTPError:
+                return []
+        if r.status_code >= 400:
+            return []
+        try:
+            data = r.json()
+        except Exception:  # noqa: BLE001
+            return []
+    items = data if isinstance(data, list) else (data.get("vods") or data.get("locations") or [])
+    out: list[dict[str, Any]] = []
+    for it in items:
+        if not isinstance(it, dict):
+            continue
+        out.append({
+            "name": it.get("name") or it.get("vod_name") or "",
+            "storage": it.get("storage") or it.get("path") or "",
+            "urlprefix": it.get("urlprefix") or it.get("url_prefix") or "",
+            "cache": it.get("cache") or "",
+        })
+    return out
+
+
+async def list_vod_files(vod_name: str, subpath: str = "") -> dict[str, Any]:
+    """Try to enumerate files inside a VOD location.
+    Returns {entries: [{name, type:"file"|"dir", size, mtime}], path, vod, supported}.
+    Flussonic v3 has `/streamer/api/v3/vods/{name}/files` on some versions;
+    if unavailable, returns {supported: False} so the UI falls back to manual file path entry.
+    """
+    cfg = await _active_config()
+    if not cfg["url"] or not vod_name:
+        return {"entries": [], "path": subpath, "vod": vod_name, "supported": False}
+    rel = subpath.lstrip("/")
+    async with _make_client(cfg) as c:
+        # Try the documented v3 endpoint first, then a couple of fallbacks.
+        candidates = [
+            f"{cfg['api_path']}/vods/{vod_name}/files" + (f"?path={rel}" if rel else ""),
+            f"{cfg['api_path']}/files?vod={vod_name}" + (f"&path={rel}" if rel else ""),
+        ]
+        data: Any = None
+        for endpoint in candidates:
+            try:
+                r = await c.get(endpoint)
+            except httpx.HTTPError:
+                continue
+            if r.status_code == 404:
+                continue
+            if r.status_code >= 400:
+                continue
+            try:
+                data = r.json()
+                break
+            except Exception:  # noqa: BLE001
+                continue
+    if data is None:
+        return {"entries": [], "path": subpath, "vod": vod_name, "supported": False}
+    raw = data if isinstance(data, list) else (data.get("entries") or data.get("files") or [])
+    entries: list[dict[str, Any]] = []
+    for it in raw:
+        if not isinstance(it, dict):
+            continue
+        nm = it.get("name") or it.get("file") or it.get("path") or ""
+        if not nm:
+            continue
+        is_dir = bool(it.get("is_dir") or it.get("type") == "dir" or (it.get("size") in (None, 0) and not nm.lower().endswith((".mp4", ".ts", ".mkv", ".mov", ".webm", ".m4v", ".mp3", ".aac"))))
+        entries.append({
+            "name": nm,
+            "type": "dir" if is_dir else "file",
+            "size": int(it.get("size") or 0),
+            "mtime": it.get("mtime") or it.get("modified") or "",
+        })
+    return {"entries": entries, "path": subpath, "vod": vod_name, "supported": True}
+
+
+async def vod_playback(vod_name: str, file_path: str) -> dict[str, Any]:
+    """Build playback URLs for a file inside a VOD location."""
+    cfg = await _active_config()
+    host = cfg["public_host"] or _host_from_url(cfg["url"]) or "your-flussonic-host"
+    scheme = "https" if cfg["https"] else "http"
+    safe_path = (file_path or "").lstrip("/")
+    base = f"{scheme}://{host}/{vod_name}/{safe_path}"
+    return {
+        "vod": vod_name,
+        "file": safe_path,
+        "host": host,
+        "outputs": [
+            {"label": "HLS (.m3u8)",       "protocol": "hls",  "url": f"{base}/index.m3u8"},
+            {"label": "HLS Low-Latency",   "protocol": "hls",  "url": f"{base}/index_ll.m3u8"},
+            {"label": "MPEG-DASH",         "protocol": "dash", "url": f"{base}/index.mpd"},
+            {"label": "Progressive MP4",   "protocol": "http", "url": f"{base}/manifest.f4m"},
+            {"label": "Direct file",       "protocol": "http", "url": base},
+        ],
+    }

@@ -4,12 +4,13 @@ import { useAuth } from "../auth";
 import { useBranding } from "../branding";
 import api from "../api";
 import {
-  Activity, LayoutDashboard, Radio, Users, BarChart3, LogOut, Settings, ShieldCheck, Gauge, Menu, X,
+  Activity, LayoutDashboard, Radio, Users, BarChart3, LogOut, Settings, ShieldCheck, Gauge, Menu, X, Film,
 } from "lucide-react";
 
 const ALL_NAV = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true, tid: "nav-dashboard", roles: ["admin", "reseller", "client"] },
   { to: "/streams", label: "Streams", icon: Radio, tid: "nav-streams", roles: ["admin", "reseller", "client"] },
+  { to: "/vod", label: "VOD", icon: Film, tid: "nav-vod", roles: ["admin", "reseller", "client"] },
   { to: "/sessions", label: "Sessions", icon: Users, tid: "nav-sessions", roles: ["admin", "reseller"] },
   { to: "/monitor", label: "Monitor", icon: Gauge, tid: "nav-monitor", roles: ["admin", "reseller"] },
   { to: "/stats", label: "Statistics", icon: BarChart3, tid: "nav-stats", roles: ["admin", "reseller"] },

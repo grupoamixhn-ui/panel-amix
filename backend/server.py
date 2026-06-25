@@ -489,6 +489,26 @@ async def streams_live_stats(name: str, user=Depends(get_current_user)):
     return data
 
 
+# ---------- VOD ----------
+@api.get("/vod/locations")
+async def vod_locations(user=Depends(get_current_user)):
+    return await flussonic.list_vod_locations()
+
+
+@api.get("/vod/locations/{vod_name}/files")
+async def vod_files(vod_name: str, path: str = "", user=Depends(get_current_user)):
+    return await flussonic.list_vod_files(vod_name, subpath=path)
+
+
+@api.get("/vod/locations/{vod_name}/playback")
+async def vod_playback(vod_name: str, file: str, user=Depends(get_current_user)):
+    if not file:
+        raise HTTPException(status_code=400, detail="file query parameter is required")
+    return await flussonic.vod_playback(vod_name, file)
+
+
+
+
 @api.get("/streams/{name}/sessions")
 async def streams_sessions(name: str, user=Depends(get_current_user)):
     return await flussonic.list_sessions_for_stream(name)

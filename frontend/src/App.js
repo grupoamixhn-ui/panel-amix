@@ -40,6 +40,7 @@ export default function App() {
             <Route path="/login" element={<LoginRoute />} />
             <Route path="/" element={<Guard><Dashboard /></Guard>} />
             <Route path="/streams" element={<Guard><Streams /></Guard>} />
+            <Route path="/vod" element={<Guard><Vod /></Guard>} />
             <Route path="/sessions" element={<Guard><Sessions /></Guard>} />
             <Route path="/stats" element={<Guard><Stats /></Guard>} />
             <Route path="/monitor" element={<Guard><Monitor /></Guard>} />
