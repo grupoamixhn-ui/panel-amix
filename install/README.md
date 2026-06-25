@@ -1,7 +1,7 @@
 # Flussonic Admin Panel — Self-hosted install
 
 Install the panel on your own Linux server in one command. Targets **Ubuntu
-22.04/24.04, Debian 11/12 and AlmaLinux/RockyLinux 8/9**.
+22.04/24.04, Debian 11/12 and AlmaLinux/RockyLinux 8/9/10**.
 
 ## What gets installed
 
@@ -128,5 +128,8 @@ automatically.
   without losing data.
 - The frontend build is fully static — no Node process runs in production.
 - `ADMIN_EMAIL` / `ADMIN_PASSWORD` from `.env` are **re-synced** to the admin
+  user on every backend startup, so you can rotate them by editing the file
+  and restarting the service.
+SSWORD` from `.env` are **re-synced** to the admin
   user on every backend startup, so you can rotate them by editing the file
   and restarting the service.

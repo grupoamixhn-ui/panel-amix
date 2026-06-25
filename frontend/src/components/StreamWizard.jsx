@@ -268,14 +268,17 @@ export default function StreamWizard({ initial, onClose, onSaved, onDeleted }) {
           <div className="cell-flat rounded-lg p-4 mb-5 bg-[var(--surface-2)] border border-[var(--border)]">
             <Fields typeId={typeId} fields={fields} set={setF} />
 
-            <div className="grad-line my-4" />
-
-            <div className="flex items-center justify-between gap-3 flex-wrap">
-              <div className="text-[11px] text-[var(--muted)]">Resulting source URL</div>
-              <code className="text-[11px] mono px-2 py-1 rounded bg-[var(--surface)] border border-[var(--border)] text-[var(--text)] truncate max-w-full" data-testid="stream-form-resolved-url">
-                {url || "—"}
-              </code>
-            </div>
+            {(typeId === "srt-listen" || typeId === "rtmp-publish") && (
+              <>
+                <div className="grad-line my-4" />
+                <div className="flex items-center justify-between gap-3 flex-wrap" data-testid="stream-form-publish-enable">
+                  <div className="text-xs font-semibold text-[var(--text-2)]">Allow publish to the stream</div>
+                  <span className="px-2 py-0.5 rounded-md border text-[10px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-700 border-emerald-200">
+                    Enabled
+                  </span>
+                </div>
+              </>
+            )}
           </div>
 
           {/* Publish password (RTMP only — SRT does not support per-stream password on Flussonic) */}

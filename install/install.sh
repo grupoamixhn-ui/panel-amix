@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # ==============================================================================
 #  Flussonic Admin Panel — native installer
-#  Supports: Ubuntu 22.04 / 24.04, Debian 11 / 12, AlmaLinux 8 / 9, RockyLinux 8 / 9
+#  Supports: Ubuntu 22.04 / 24.04, Debian 11 / 12, AlmaLinux 8 / 9 / 10,
+#            RockyLinux 8 / 9 / 10
 #
 #  Usage:
 #    sudo bash install.sh                              # local HTTP on port 80
@@ -10,6 +11,7 @@
 #    sudo bash install.sh --no-mongo                   # skip MongoDB install (already running)
 #    sudo bash install.sh --source-dir /path/to/code   # use code from this dir instead of script dir
 #    sudo bash install.sh --admin-email me@me.com      # custom admin email
+#    sudo bash install.sh --admin-password "S3cret!"   # fix admin password (else auto-generated)
 #
 #  After install:
 #    Panel URL, admin credentials and service status are printed at the end.
@@ -33,19 +35,21 @@ SERVICE_NAME="flussonic-admin"
 DOMAIN=""
 LISTEN_PORT="80"
 ADMIN_EMAIL="admin@localhost"
+ADMIN_PASSWORD_OVERRIDE=""
 INSTALL_MONGO="1"
 SOURCE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 # ---------- args --------------------------------------------------------------
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --domain)         DOMAIN="$2"; shift 2 ;;
-    --port)           LISTEN_PORT="$2"; shift 2 ;;
-    --admin-email)    ADMIN_EMAIL="$2"; shift 2 ;;
-    --no-mongo)       INSTALL_MONGO="0"; shift ;;
-    --source-dir)     SOURCE_DIR="$2"; shift 2 ;;
-    -h|--help)        sed -n '2,20p' "$0"; exit 0 ;;
-    *)                die "Unknown option: $1" ;;
+    --domain)           DOMAIN="$2"; shift 2 ;;
+    --port)             LISTEN_PORT="$2"; shift 2 ;;
+    --admin-email)      ADMIN_EMAIL="$2"; shift 2 ;;
+    --admin-password)   ADMIN_PASSWORD_OVERRIDE="$2"; shift 2 ;;
+    --no-mongo)         INSTALL_MONGO="0"; shift ;;
+    --source-dir)       SOURCE_DIR="$2"; shift 2 ;;
+    -h|--help)          sed -n '2,22p' "$0"; exit 0 ;;
+    *)                  die "Unknown option: $1" ;;
   esac
 done
 
@@ -123,11 +127,11 @@ if [[ "$INSTALL_MONGO" == "1" ]]; then
     if [[ "$PKG_FAMILY" == "deb" ]]; then
       curl -fsSL https://pgp.mongodb.com/server-7.0.asc | gpg --dearmor -o /usr/share/keyrings/mongodb-server-7.0.gpg
       CODENAME="$(lsb_release -cs)"
-      # Ubuntu 24.04 (noble) uses jammy repo for now
+      # MongoDB 7 has native repos for noble + bookworm now; keep mapping safe.
       case "$CODENAME" in
-        noble) MONGO_CODENAME="jammy" ;;
-        bookworm) MONGO_CODENAME="bookworm" ;;
-        *) MONGO_CODENAME="$CODENAME" ;;
+        noble|jammy|focal) MONGO_CODENAME="$CODENAME" ;;
+        bookworm|bullseye) MONGO_CODENAME="$CODENAME" ;;
+        *)                 MONGO_CODENAME="$CODENAME" ;;
       esac
       if [[ "$ID" == "ubuntu" ]]; then
         echo "deb [arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-7.0.gpg] https://repo.mongodb.org/apt/ubuntu $MONGO_CODENAME/mongodb-org/7.0 multiverse" > /etc/apt/sources.list.d/mongodb-org-7.0.list
@@ -210,7 +214,11 @@ if [[ -f "$ENV_FILE" ]] && grep -q "^JWT_SECRET=" "$ENV_FILE"; then
   ENV_REUSED=1
 else
   JWT_SECRET="$(openssl rand -hex 32)"
-  ADMIN_PASSWORD="$(openssl rand -base64 14 | tr -d '+/=' | cut -c1-16)"
+  if [[ -n "$ADMIN_PASSWORD_OVERRIDE" ]]; then
+    ADMIN_PASSWORD="$ADMIN_PASSWORD_OVERRIDE"
+  else
+    ADMIN_PASSWORD="$(openssl rand -base64 14 | tr -d '+/=' | cut -c1-16)"
+  fi
   cat > "$ENV_FILE" <<EOF
 MONGO_URL=mongodb://127.0.0.1:27017
 DB_NAME=flussonic_admin
@@ -219,7 +227,6 @@ JWT_TTL_HOURS=72
 ADMIN_EMAIL=$ADMIN_EMAIL
 ADMIN_PASSWORD=$ADMIN_PASSWORD
 CORS_ORIGINS=*
-DEMO_MODE=false
 EOF
   ENV_REUSED=0
 fi
