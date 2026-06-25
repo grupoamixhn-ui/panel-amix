@@ -28,6 +28,7 @@ export default function Layout({ children }) {
   const [info, setInfo] = useState(null);
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false); // desktop: collapsed by default, expands on hover
 
   useEffect(() => {
     const load = () => api.get("/server/info").then((r) => setInfo(r.data)).catch(() => {});
@@ -62,20 +63,27 @@ export default function Layout({ children }) {
   const navItems = ALL_NAV.filter((n) => n.roles.includes(user?.role || "admin"));
   const currentTitle = navItems.find((n) => (n.end ? location.pathname === n.to : location.pathname.startsWith(n.to)))?.label || "Dashboard";
 
-  const SidebarBody = (
+  const renderSidebar = (collapsed) => (
     <>
-      <div className="px-5 py-5 flex items-center gap-2.5 border-b border-[var(--border)]">
+      <div className={`${collapsed ? "px-3" : "px-5"} py-5 flex items-center gap-2.5 border-b border-[var(--border)] transition-all`}>
         {logo_data_uri ? (
-          <img src={logo_data_uri} alt={displayBrand} className="h-10 max-w-[180px] object-contain" data-testid="sidebar-logo" />
+          <img
+            src={logo_data_uri}
+            alt={displayBrand}
+            className={`object-contain transition-all ${collapsed ? "h-8 w-8" : "h-10 max-w-[180px]"}`}
+            data-testid="sidebar-logo"
+          />
         ) : (
           <>
-            <div className="w-9 h-9 rounded-xl bg-[var(--primary)] flex items-center justify-center shadow-md">
+            <div className="w-9 h-9 rounded-xl bg-[var(--primary)] flex items-center justify-center shadow-md shrink-0">
               <Activity className="w-4.5 h-4.5 text-white" strokeWidth={2.5} />
             </div>
-            <div>
-              <div className="text-sm font-semibold tracking-tight">{displayBrand}</div>
-              <div className="text-[10px] mono uppercase tracking-widest text-[var(--muted)]">{displayTagline}</div>
-            </div>
+            {!collapsed && (
+              <div className="min-w-0 overflow-hidden">
+                <div className="text-sm font-semibold tracking-tight truncate">{displayBrand}</div>
+                <div className="text-[10px] mono uppercase tracking-widest text-[var(--muted)] truncate">{displayTagline}</div>
+              </div>
+            )}
           </>
         )}
         <button
@@ -88,83 +96,113 @@ export default function Layout({ children }) {
         </button>
       </div>
 
-      <div className="px-3 pt-4 pb-2 label">Workspace</div>
-      <nav className="flex-1 px-3 space-y-0.5 overflow-y-auto">
+      {!collapsed && <div className="px-3 pt-4 pb-2 label">Workspace</div>}
+      {collapsed && <div className="pt-3" />}
+      <nav className={`flex-1 ${collapsed ? "px-2" : "px-3"} space-y-0.5 overflow-y-auto overflow-x-hidden`}>
         {navItems.map(({ to, label, icon: Icon, end, tid }) => (
           <NavLink
             key={to}
             to={to}
             end={end}
             data-testid={tid}
+            title={collapsed ? label : undefined}
             className={({ isActive }) =>
-              `flex items-center gap-3 px-3 py-2.5 text-sm rounded-lg transition-all duration-150 ${
+              `flex items-center ${collapsed ? "justify-center px-2" : "gap-3 px-3"} py-2.5 text-sm rounded-lg transition-all duration-150 relative ${
                 isActive
                   ? "bg-[var(--primary-soft)] text-[var(--primary)] font-medium"
                   : "text-[var(--text-2)] hover:bg-[var(--surface-2)]"
               }`
             }
           >
-            <Icon className="w-4 h-4" strokeWidth={2} />
-            <span className="flex-1">{label}</span>
+            <Icon className="w-4 h-4 shrink-0" strokeWidth={2} />
+            {!collapsed && <span className="flex-1 truncate">{label}</span>}
             {to === "/settings" && updateAvailable && (
-              <span
-                className="flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-[var(--primary)] text-white text-[9px] font-bold uppercase tracking-wider"
-                title="Panel update available"
-                data-testid="nav-update-badge"
-              >
-                <ArrowUpCircle className="w-2.5 h-2.5" />
-                NEW
-              </span>
+              collapsed ? (
+                <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-[var(--primary)]" />
+              ) : (
+                <span
+                  className="flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-[var(--primary)] text-white text-[9px] font-bold uppercase tracking-wider"
+                  title="Panel update available"
+                  data-testid="nav-update-badge"
+                >
+                  <ArrowUpCircle className="w-2.5 h-2.5" />
+                  NEW
+                </span>
+              )
             )}
           </NavLink>
         ))}
       </nav>
 
-      <div className={`m-3 mt-2 p-3 rounded-xl border ${
-        connected
-          ? "border-[#BBF7D0] bg-gradient-to-br from-[var(--live-soft)] to-white"
-          : "border-[var(--border)] bg-gradient-to-br from-[var(--primary-soft)] to-white"
-      }`}>
-        <div className="flex items-center gap-2 mb-0.5">
-          <span className={`dot ${connected ? "dot-live" : "dot-warn"}`} />
-          <div className="text-xs font-semibold text-[var(--text)]">
-            {connected ? "Live · connected" : "Not connected"}
+      {!collapsed && (
+        <div className={`m-3 mt-2 p-3 rounded-xl border ${
+          connected
+            ? "border-[#BBF7D0] bg-gradient-to-br from-[var(--live-soft)] to-white"
+            : "border-[var(--border)] bg-gradient-to-br from-[var(--primary-soft)] to-white"
+        }`}>
+          <div className="flex items-center gap-2 mb-0.5">
+            <span className={`dot ${connected ? "dot-live" : "dot-warn"}`} />
+            <div className="text-xs font-semibold text-[var(--text)]">
+              {connected ? "Live · connected" : "Not connected"}
+            </div>
+          </div>
+          <div className="text-[11px] text-[var(--muted)] leading-snug">
+            {connected
+              ? `${info?.streams_live ?? 0}/${info?.streams_total ?? 0} streams · ${info?.clients ?? 0} viewers`
+              : "Connect a real Flussonic server in Settings."}
           </div>
         </div>
-        <div className="text-[11px] text-[var(--muted)] leading-snug">
-          {connected
-            ? `${info?.streams_live ?? 0}/${info?.streams_total ?? 0} streams · ${info?.clients ?? 0} viewers`
-            : "Connect a real Flussonic server in Settings."}
-        </div>
-      </div>
+      )}
 
       <div className="border-t border-[var(--border)] p-3">
-        <div className="px-2 py-1.5 flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[var(--primary)] to-[#7C3AED] flex items-center justify-center text-white text-xs font-semibold shrink-0">
+        <div className={`px-2 py-1.5 flex items-center ${collapsed ? "justify-center" : "gap-3"}`}>
+          <div
+            className="w-8 h-8 rounded-full bg-gradient-to-br from-[var(--primary)] to-[#7C3AED] flex items-center justify-center text-white text-xs font-semibold shrink-0"
+            title={collapsed ? `${user?.email} · ${user?.role}` : undefined}
+          >
             {(user?.email || "A").slice(0,1).toUpperCase()}
           </div>
-          <div className="flex-1 min-w-0">
-            <div className="text-xs font-medium truncate">{user?.email}</div>
-            <div className="text-[10px] text-[var(--muted)] uppercase tracking-wider">{user?.role}</div>
-          </div>
-          <button
-            data-testid="logout-button"
-            onClick={async () => { await logout(); nav("/login"); }}
-            className="text-[var(--muted)] hover:text-[var(--error)] transition-colors p-1"
-            title="Logout"
-          >
-            <LogOut className="w-4 h-4" />
-          </button>
+          {!collapsed && (
+            <>
+              <div className="flex-1 min-w-0">
+                <div className="text-xs font-medium truncate">{user?.email}</div>
+                <div className="text-[10px] text-[var(--muted)] uppercase tracking-wider">{user?.role}</div>
+              </div>
+              <button
+                data-testid="logout-button"
+                onClick={async () => { await logout(); nav("/login"); }}
+                className="text-[var(--muted)] hover:text-[var(--error)] transition-colors p-1"
+                title="Logout"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+            </>
+          )}
         </div>
       </div>
     </>
   );
 
+  const SidebarBody = renderSidebar(false);
+
   return (
     <div className="min-h-screen flex relative z-10">
-      {/* Desktop sidebar (≥md) — vertical */}
-      <aside className="hidden md:flex w-64 border-r border-[var(--border)] bg-[var(--surface)] flex-col">
-        {SidebarBody}
+      {/* Desktop sidebar (≥md) — collapsible, expands on hover. Floats over content. */}
+      <aside
+        className="hidden md:flex shrink-0 transition-all duration-200"
+        style={{ width: "4rem" }}
+        data-testid="desktop-sidebar-spacer"
+        aria-hidden
+      />
+      <aside
+        onMouseEnter={() => setSidebarOpen(true)}
+        onMouseLeave={() => setSidebarOpen(false)}
+        className={`hidden md:flex fixed inset-y-0 left-0 z-40 border-r border-[var(--border)] bg-[var(--surface)] flex-col transition-all duration-200 ${
+          sidebarOpen ? "w-64 shadow-xl" : "w-16"
+        }`}
+        data-testid="desktop-sidebar"
+      >
+        {renderSidebar(!sidebarOpen)}
       </aside>
 
       {/* Mobile drawer (used by the "More" button — hidden by default) */}
