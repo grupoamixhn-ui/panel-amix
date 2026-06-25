@@ -408,7 +408,19 @@ async def sub_users_delete(uid: str, user=Depends(require_admin_or_reseller)):
 # ---------- Flussonic endpoints ----------
 @api.get("/server/info")
 async def server_info(user=Depends(get_current_user)):
-    return await flussonic.get_server_info()
+    info = await flussonic.get_server_info()
+    pool = await effective_streams(user)
+    if pool is None:
+        return info
+    # Non-admin: scope KPIs to allowed streams only
+    streams = await flussonic.list_streams()
+    pool_set = set(pool)
+    scoped = [s for s in streams if s.get("name") in pool_set]
+    info["streams_total"] = len(scoped)
+    info["streams_live"] = sum(1 for s in scoped if s.get("alive"))
+    info["clients"] = sum(int(s.get("clients") or 0) for s in scoped)
+    info["bandwidth_bps"] = sum(int(s.get("bitrate") or 0) for s in scoped)
+    return info
 
 @api.get("/streams")
 async def streams_list(user=Depends(get_current_user)):
@@ -549,7 +561,23 @@ async def sessions_list_v2(user=Depends(get_current_user)):
 
 @api.get("/stats")
 async def stats(points: int = 30, user=Depends(get_current_user)):
-    return await flussonic.get_stats_timeseries(points)
+    pool = await effective_streams(user)
+    if pool is None:
+        return await flussonic.get_stats_timeseries(points)
+    # Non-admin: build series from scoped streams only
+    streams = await flussonic.list_streams()
+    pool_set = set(pool)
+    scoped = [s for s in streams if s.get("name") in pool_set]
+    clients = sum(int(s.get("clients") or 0) for s in scoped)
+    bandwidth = sum(int(s.get("bitrate") or 0) for s in scoped)
+    from datetime import datetime as _dt, timedelta as _td, timezone as _tz
+    now = _dt.now(_tz.utc)
+    series = [{
+        "ts": (now - _td(minutes=i)).isoformat(),
+        "clients": clients,
+        "bandwidth": bandwidth,
+    } for i in range(points, 0, -1)]
+    return {"series": series}
 
 
 @api.get("/monitor/metrics")

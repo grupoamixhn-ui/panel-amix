@@ -61,6 +61,7 @@ User wants a web admin panel for the Flussonic Media Server API. Confirmed via c
 - ✅ SSL Section in Settings — Let's Encrypt automation + manual upload + sudoers helper for Nginx (2026-06-25)
 - ✅ Auto-detection of SRT/RTMP ports via `/api/config/flussonic/detect-ports` (2026-06-25)
 - ✅ RBAC UI restrictions on Streams page for `client` role — hides "New stream", Edit, Delete buttons. Imported `useAuth` from `../auth`. Verified with screenshot using `client.test@flussonic.io` (2026-06-25)
+- ✅ Client role now sees Sessions + Statistics pages, all data scoped to assigned `streams_allowed`. Backend `/server/info` and `/stats` filter KPIs by user scope (admin sees global; reseller/client sees only assigned). Verified: 3 assigned streams → 3 visible, 1 session shown, KPIs reflect scoped totals (2026-06-25)
 
 ## Prioritized Backlog
 **P1 (post-MVP polish)**

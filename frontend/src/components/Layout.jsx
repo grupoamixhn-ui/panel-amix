@@ -10,9 +10,9 @@ import {
 const ALL_NAV = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true, tid: "nav-dashboard", roles: ["admin", "reseller", "client"] },
   { to: "/streams", label: "Streams", icon: Radio, tid: "nav-streams", roles: ["admin", "reseller", "client"] },
-  { to: "/sessions", label: "Sessions", icon: Users, tid: "nav-sessions", roles: ["admin", "reseller"] },
+  { to: "/sessions", label: "Sessions", icon: Users, tid: "nav-sessions", roles: ["admin", "reseller", "client"] },
   { to: "/monitor", label: "Monitor", icon: Gauge, tid: "nav-monitor", roles: ["admin", "reseller"] },
-  { to: "/stats", label: "Statistics", icon: BarChart3, tid: "nav-stats", roles: ["admin", "reseller"] },
+  { to: "/stats", label: "Statistics", icon: BarChart3, tid: "nav-stats", roles: ["admin", "reseller", "client"] },
   { to: "/resellers", label: "Resellers", icon: ShieldCheck, tid: "nav-resellers", roles: ["admin", "reseller"] },
   { to: "/settings", label: "Settings", icon: Settings, tid: "nav-settings", roles: ["admin"] },
 ];
