@@ -278,15 +278,17 @@ export default function StreamWizard({ initial, onClose, onSaved, onDeleted }) {
             </div>
           </div>
 
-          {/* Publish password (RTMP / SRT) */}
+          {/* Publish password (RTMP only — SRT does not support per-stream password on Flussonic) */}
           <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-4 py-3 mb-5">
             <div className="flex items-center gap-2 mb-2">
               <Lock className="w-3.5 h-3.5 text-[var(--muted)]" />
-              <div className="text-xs font-semibold">Publish password <span className="text-[var(--muted)] font-normal">· optional</span></div>
+              <div className="text-xs font-semibold">Publish password <span className="text-[var(--muted)] font-normal">· RTMP only · optional</span></div>
             </div>
             <p className="text-[11px] text-[var(--muted)] mb-2 leading-snug">
-              When set, Flussonic only accepts RTMP / SRT push from encoders that include this password.
+              When set, Flussonic only accepts RTMP push from encoders that include this password.
               OBS / encoder URL becomes <span className="mono">rtmp://host/{name || "STREAM"}?password=•••</span>.
+              <br />
+              <span className="opacity-80">SRT publish ignores this password — use the SRT URL as shown in Outputs.</span>
             </p>
             <div className="relative">
               <input

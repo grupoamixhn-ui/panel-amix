@@ -778,8 +778,9 @@ async def stream_outputs(name: str) -> dict[str, Any]:
             {
                 "label": "SRT publish",
                 "protocol": "srt",
-                "url": f"srt://{host}:{srt_p}?streamid=publish:{name}"
-                       + (f":{publish_password}" if publish_password else ""),
+                # SRT does not support per-stream password via URL on Flussonic.
+                # Keep streamid clean: publish:STREAM_NAME
+                "url": f"srt://{host}:{srt_p}?streamid=publish:{name}",
             },
         ],
         "publish_password": publish_password,

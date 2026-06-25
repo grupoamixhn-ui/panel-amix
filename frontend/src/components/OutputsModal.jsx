@@ -103,8 +103,9 @@ export default function OutputsModal({ streamName, onClose }) {
                     <div className="mt-3 px-3 py-2 rounded-lg bg-[var(--primary-soft)] border border-blue-100 text-[11px] text-[var(--text-2)] leading-relaxed flex items-start gap-2" data-testid="publish-password-info">
                       <span className="font-bold mono text-[var(--primary)]">🔒</span>
                       <div>
-                        This stream is <strong>password protected</strong>. Encoders must include{" "}
-                        <span className="mono">?password={data.publish_password}</span> in the URL (or as part of the OBS stream key).
+                        This stream is <strong>password protected for RTMP only</strong>. RTMP encoders must include{" "}
+                        <span className="mono">?password={data.publish_password}</span> in the URL (or as part of the OBS stream key).{" "}
+                        <span className="text-[var(--muted)]">SRT publish does not carry a password — use the URL as shown.</span>
                       </div>
                     </div>
                   )}

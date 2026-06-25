@@ -55,6 +55,8 @@ User wants a web admin panel for the Flussonic Media Server API. Confirmed via c
 - ✅ Demo mode REMOVED entirely (backend + frontend); RTMP publish URL now uses Flussonic `/static/` application path; per-stream `max_bitrate_kbps` and `source_timeout` fields added to Stream wizard with server-wide max_sessions/client_timeout disclaimer (2026-06-24)
 - ✅ Server-wide limits card in Settings (GET/PUT `/api/server/limits`): editable `max_sessions` (pushed to Flussonic via PUT /config root level, admin-only) + read-only `client_timeout=60` with copyable `/etc/flussonic/flussonic.conf` snippet. Default set to 400 per user request (2026-06-24)
 - ✅ `max_bitrate_kbps` unit fix — Flussonic stores in bits/sec, UI shows kbit/s (was incorrectly /8 conversion); RTSP and DASH removed from Outputs modal; RTMP pull URL now includes /static/ matching publish; new `publisher_ip` + `publisher_proto` fields exposed in /api/streams (from stats.published_from / published_via). Streams table "Source" column shows colored SRT (purple) / RTMP (orange) badge + publisher IP for active push streams (2026-06-24)
+- ✅ Per-stream Live Monitor modal (`StreamLiveMonitor.jsx`) wired to `GET /api/streams/{name}/live-stats` — Recharts time-series for input/output bitrate + bandwidth, plus video/audio codec/resolution/fps panel (2026-06-25)
+- ✅ SRT publish URL no longer appends `:PASSWORD` — SRT on Flussonic does not support per-stream password via streamid. RTMP keeps the `?password=` suffix. Updated Outputs modal copy + StreamWizard label to clarify "Publish password · RTMP only" (2026-06-25)
 
 ## Prioritized Backlog
 **P1 (post-MVP polish)**
