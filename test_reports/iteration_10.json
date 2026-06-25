@@ -1,0 +1,32 @@
+{
+  "summary": "Iteration 10 — Verified TWO items end-to-end: (1) RTSP + DASH (.mpd) removed from the per-stream Outputs modal (UI + API), and (2) iter9 max_bitrate kbit/s conversion bug-fix round-trip via TestMaxBitrateConversion. Backend: 15/15 tests pass in /app/backend/tests/test_streams_limits_and_rtmp.py — including the 4 parametric kbps→bps round-trips (5000, 1500, 100, 1), the 5_000_000 bps live-Flussonic verification, and the two co-field preservation tests (title-only PUT preserves max_bitrate_kbps; source_timeout-only PUT preserves max_bitrate_kbps; and vice versa). API curl: GET /api/streams/Tudn/outputs returns 'outputs' = EXACTLY 4 entries in the exact required order: ['HLS (.m3u8)', 'HLS Low-Latency', 'RTMP pull', 'SRT pull']; full-response 'rtsp' substring scan = False; 'dash' / '.mpd' substring scan = False. 'publish' array intact with 2 entries ('RTMP publish (OBS / encoder)' → rtmp://oniptv.pro/static/Tudn, 'SRT publish' → srt://oniptv.pro:9998?streamid=publish:Tudn). Frontend: Playwright login as admin@flussonic.io, navigated to /streams, clicked data-testid='stream-outputs-Tudn' (the share/copy icon next to the Tudn row), Outputs modal (data-testid='outputs-modal') opened. Modal body under 'Output · viewers connect here' shows EXACTLY the 4 expected protocols with correct URLs against host oniptv.pro; the 'Publish · encoders / OBS push here' section below it remains intact (RTMP publish to /static/Tudn + SRT publish + the OBS Server / Stream Key helper rows). Modal text-content scans: 'RTSP'=False, 'DASH'=False, '.mpd'=False. Cleanup: TestMaxBitrateConversion's autouse module-scoped fixture restored Tudn to max_bitrate_kbps=0, source_timeout=60 (verified via subsequent GET).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_streams_limits_and_rtmp.py",
+    "/app/test_reports/pytest/iter10_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "flussonic.py:697-720 stream_outputs() — 'outputs' list now contains EXACTLY 4 entries in the spec order (HLS .m3u8, HLS Low-Latency, RTMP pull, SRT pull). RTSP and DASH(.mpd) entries are fully removed at source, not filtered in the UI — this is the correct place for the fix (single source of truth). 'publish' list is independent (RTMP publish + SRT publish), unaffected by this change. Good.",
+    "flussonic.py max_bitrate conversion — verified by round-trip (kbps → Flussonic raw bps → kbps on GET): 5000↔5_000_000, 1500↔1_500_000, 100↔100_000, 1↔1000. The old `*1000//8` bytes/sec bug is gone; code now correctly treats Flussonic's max_bitrate as bits/sec (multiply by 1000 on write, divide by 1000 on read).",
+    "Title-only PUT and source_timeout-only PUT both preserve max_bitrate_kbps in the stored Flussonic config — partial-update merge logic in update_stream() is correct (does NOT clobber unspecified fields with defaults).",
+    "OutputsModal.jsx (data-testid='outputs-modal') is purely data-driven from the /outputs API — no hard-coded RTSP or DASH cards remain in the JSX. Backend is the single source of truth for the protocol list, which makes future additions/removals trivial.",
+    "data-testid coverage on the Streams page row is excellent — stream-outputs-Tudn, stream-clients-Tudn, stream-toggle-Tudn, stream-reset-Tudn, stream-edit-icon-Tudn, stream-delete-Tudn — facilitates robust UI regression tests."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (15/15)", "frontend": "100% (modal opens, 4 expected protocols rendered, RTSP/DASH absent, publish section intact)"},
+  "test_credentials": "admin@flussonic.io / admin123",
+  "seed_data_creation": "None. The TestMaxBitrateConversion tests mutate Tudn's max_bitrate_kbps to 5000/1500/100/1/4000/2000 transiently and restore Tudn to {max_bitrate_kbps=0, source_timeout=60} via the module-scoped autouse teardown. Confirmed cleanup state.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Both requested verifications PASS. Outputs API + Outputs modal show only 4 protocols (HLS, HLS-LL, RTMP pull, SRT pull); RTSP and DASH(.mpd) are entirely removed at /app/backend/flussonic.py stream_outputs(). The iter9 kbit/s conversion fix is verified by /app/backend/tests/test_streams_limits_and_rtmp.py::TestMaxBitrateConversion (7 assertions, all green). To rerun: REACT_APP_BACKEND_URL=https://flussonic-control.preview.emergentagent.com pytest /app/backend/tests/test_streams_limits_and_rtmp.py -v. UI flow: login as admin → /streams → click data-testid='stream-outputs-Tudn' → assert data-testid='outputs-modal' contains exactly the 4 protocol labels and lacks 'RTSP'/'DASH'/'.mpd' substrings.",
+  "rca of the issue": "N/A — both items already correctly implemented by main agent. Verification only. (Historical iter9 RCA: Flussonic stores max_bitrate in BITS/sec; previous code used `*1000//8` assuming bytes/sec, which made PUT 5000 → store 625_000 bps → GET 625 kbit/s. Fix is `*1000` on write, `//1000` on read — confirmed working.)"
+}

@@ -697,10 +697,8 @@ async def stream_outputs(name: str) -> dict[str, Any]:
         "outputs": [
             {"label": "HLS (.m3u8)", "protocol": "hls", "url": f"{scheme}://{host}/{name}/index.m3u8"},
             {"label": "HLS Low-Latency", "protocol": "hls", "url": f"{scheme}://{host}/{name}/index_ll.m3u8"},
-            {"label": "DASH (.mpd)", "protocol": "dash", "url": f"{scheme}://{host}/{name}/index.mpd"},
             {"label": "RTMP pull", "protocol": "rtmp", "url": f"rtmp://{rtmp_host}/{name}"},
             {"label": "SRT pull", "protocol": "srt", "url": f"srt://{host}:{srt_p}?streamid={name}"},
-            {"label": "RTSP", "protocol": "rtsp", "url": f"rtsp://{host}/{name}"},
         ],
         "publish": [
             {
