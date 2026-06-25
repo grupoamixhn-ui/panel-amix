@@ -15,6 +15,8 @@ function statusPill(s) {
 }
 
 export default function Streams() {
+  const { user } = useAuth();
+  const isClient = user?.role === "client";
   const [streams, setStreams] = useState([]);
   const [q, setQ] = useState("");
   const [wizardOpen, setWizardOpen] = useState(false);
@@ -78,13 +80,15 @@ export default function Streams() {
         subtitle="Ingest & publish"
         testId="streams-header"
         right={
-          <button
-            onClick={() => { setEditing(null); setWizardOpen(true); }}
-            className="btn btn-primary"
-            data-testid="new-stream-button"
-          >
-            <Plus className="w-4 h-4" /> New stream
-          </button>
+          isClient ? null : (
+            <button
+              onClick={() => { setEditing(null); setWizardOpen(true); }}
+              className="btn btn-primary"
+              data-testid="new-stream-button"
+            >
+              <Plus className="w-4 h-4" /> New stream
+            </button>
+          )
         }
       />
 
@@ -121,7 +125,7 @@ export default function Streams() {
                   <tr key={s.name} className="border-t border-[var(--border)] hover:bg-[var(--surface-2)] transition-colors" data-testid={`stream-row-${s.name}`}>
                     <td className="px-5 py-3.5">{statusPill(s)}</td>
                     <td className="px-5 py-3.5">
-                      <button onClick={() => { setEditing(s); setWizardOpen(true); }} className="font-medium hover:text-[var(--primary)] transition-colors" data-testid={`stream-edit-${s.name}`}>
+                      <button onClick={() => { if (!isClient) { setEditing(s); setWizardOpen(true); } }} className={`font-medium transition-colors ${isClient ? "cursor-default" : "hover:text-[var(--primary)]"}`} data-testid={`stream-edit-${s.name}`}>
                         {s.name}
                       </button>
                       {s.title && <div className="text-xs text-[var(--muted)]">{s.title}</div>}
@@ -213,22 +217,26 @@ export default function Streams() {
                         >
                           <RotateCw className={`w-3.5 h-3.5 ${resetting[s.name] ? "animate-spin" : ""}`} />
                         </button>
-                        <button
-                          onClick={() => { setEditing(s); setWizardOpen(true); }}
-                          className="btn-icon"
-                          title="Edit"
-                          data-testid={`stream-edit-icon-${s.name}`}
-                        >
-                          <Pencil className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => del(s.name)}
-                          className="btn-icon btn-icon-danger"
-                          title="Delete"
-                          data-testid={`stream-delete-${s.name}`}
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        {!isClient && (
+                          <button
+                            onClick={() => { setEditing(s); setWizardOpen(true); }}
+                            className="btn-icon"
+                            title="Edit"
+                            data-testid={`stream-edit-icon-${s.name}`}
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                        {!isClient && (
+                          <button
+                            onClick={() => del(s.name)}
+                            className="btn-icon btn-icon-danger"
+                            title="Delete"
+                            data-testid={`stream-delete-${s.name}`}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
