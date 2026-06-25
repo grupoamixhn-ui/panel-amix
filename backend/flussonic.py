@@ -309,7 +309,13 @@ async def create_stream(
 ) -> dict[str, Any]:
     cfg = await _active_config()
     async with _make_client(cfg) as c:
-        body: dict[str, Any] = {"name": name, "inputs": [{"url": url}], "title": title}
+        # For receive-type streams (`publish://`) Flussonic doesn't need an input
+        # — it accepts pushes on the global rtmp_publish/srt_publish ports by stream name.
+        body: dict[str, Any] = {"name": name, "title": title}
+        if url and url != "publish://":
+            body["inputs"] = [{"url": url}]
+        else:
+            body["inputs"] = []
         if publish_password:
             body["password"] = publish_password
         # Flussonic max_bitrate is in bits/sec, our API takes kbit/s
@@ -335,7 +341,10 @@ async def update_stream(name: str, payload: dict[str, Any]) -> dict[str, Any] | 
         merged.setdefault("name", name)
         # Apply incoming changes
         if "url" in payload and payload["url"]:
-            merged["inputs"] = [{"url": payload["url"]}]
+            if payload["url"] == "publish://":
+                merged["inputs"] = []
+            else:
+                merged["inputs"] = [{"url": payload["url"]}]
         if "title" in payload:
             merged["title"] = payload["title"]
         if "publish_password" in payload:
