@@ -45,13 +45,17 @@ async def _active_config() -> dict[str, Any]:
         doc = await _DB.config.find_one({"_id": "flussonic"})
         if doc:
             cfg = doc
+    # Legacy single srt_port kept as fallback for older configs
+    legacy_srt = int(cfg.get("srt_port") or 9998)
     return {
         "url": (cfg.get("url") or os.environ.get("FLUSSONIC_URL", "")).strip(),
         "user": cfg.get("user", os.environ.get("FLUSSONIC_USER", "")),
         "password": cfg.get("password", os.environ.get("FLUSSONIC_PASS", "")),
         "api_path": (cfg.get("api_path") or os.environ.get("FLUSSONIC_API_PATH") or "/streamer/api/v3").rstrip("/"),
         "public_host": (cfg.get("public_host") or "").strip(),
-        "srt_port": int(cfg.get("srt_port") or 9998),
+        "srt_port": legacy_srt,
+        "srt_publish_port": int(cfg.get("srt_publish_port") or legacy_srt),
+        "srt_play_port": int(cfg.get("srt_play_port") or legacy_srt),
         "rtmp_port": int(cfg.get("rtmp_port") or 1935),
         "https": bool(cfg.get("https", True)),
     }
@@ -67,6 +71,8 @@ async def get_public_config() -> dict[str, Any]:
         "api_path": c["api_path"],
         "public_host": c["public_host"],
         "srt_port": c["srt_port"],
+        "srt_publish_port": c["srt_publish_port"],
+        "srt_play_port": c["srt_play_port"],
         "rtmp_port": c["rtmp_port"],
         "https": c["https"],
     }
@@ -76,6 +82,7 @@ async def save_config(
     *, url: str, user: str, password: str | None,
     api_path: str | None = None, public_host: str | None = None,
     srt_port: int | None = None, rtmp_port: int | None = None,
+    srt_publish_port: int | None = None, srt_play_port: int | None = None,
     https: bool | None = None,
 ) -> None:
     if _DB is None:
@@ -91,6 +98,10 @@ async def save_config(
         update["public_host"] = public_host.strip()
     if srt_port is not None:
         update["srt_port"] = int(srt_port)
+    if srt_publish_port is not None:
+        update["srt_publish_port"] = int(srt_publish_port)
+    if srt_play_port is not None:
+        update["srt_play_port"] = int(srt_play_port)
     if rtmp_port is not None:
         update["rtmp_port"] = int(rtmp_port)
     if https is not None:
@@ -745,7 +756,8 @@ async def stream_outputs(name: str) -> dict[str, Any]:
     host = cfg["public_host"] or _host_from_url(cfg["url"]) or "your-flussonic-host"
     scheme = "https" if cfg["https"] else "http"
     rtmp_p = cfg["rtmp_port"]
-    srt_p = cfg["srt_port"]
+    srt_play_p = cfg["srt_play_port"]
+    srt_pub_p = cfg["srt_publish_port"]
     rtmp_host = f"{host}:{rtmp_p}" if rtmp_p not in (1935,) else host
 
     # Fetch publish_password (if any) for this stream
@@ -764,7 +776,7 @@ async def stream_outputs(name: str) -> dict[str, Any]:
             {"label": "HLS (.m3u8)", "protocol": "hls", "url": f"{scheme}://{host}/{name}/index.m3u8"},
             {"label": "HLS Low-Latency", "protocol": "hls", "url": f"{scheme}://{host}/{name}/index_ll.m3u8"},
             {"label": "RTMP pull", "protocol": "rtmp", "url": f"rtmp://{rtmp_host}/static/{name}"},
-            {"label": "SRT pull", "protocol": "srt", "url": f"srt://{host}:{srt_p}?streamid={name}"},
+            {"label": "SRT pull", "protocol": "srt", "url": f"srt://{host}:{srt_play_p}?streamid={name}"},
         ],
         "publish": [
             {
@@ -780,7 +792,7 @@ async def stream_outputs(name: str) -> dict[str, Any]:
                 "protocol": "srt",
                 # SRT does not support per-stream password via URL on Flussonic.
                 # Keep streamid clean: publish:STREAM_NAME
-                "url": f"srt://{host}:{srt_p}?streamid=publish:{name}",
+                "url": f"srt://{host}:{srt_pub_p}?streamid=publish:{name}",
             },
         ],
         "publish_password": publish_password,

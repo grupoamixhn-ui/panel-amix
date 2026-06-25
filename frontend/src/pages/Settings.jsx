@@ -37,6 +37,8 @@ export default function Settings() {
         api_path: c.data.api_path || "",
         public_host: c.data.public_host || "",
         srt_port: c.data.srt_port || 9998,
+        srt_publish_port: c.data.srt_publish_port || c.data.srt_port || 3525,
+        srt_play_port: c.data.srt_play_port || c.data.srt_port || 7865,
         rtmp_port: c.data.rtmp_port || 1935,
         https: c.data.https !== false,
       });
@@ -142,6 +144,8 @@ export default function Settings() {
         api_path: form.api_path || null,
         public_host: form.public_host || "",
         srt_port: Number(form.srt_port) || 9998,
+        srt_publish_port: Number(form.srt_publish_port) || 3525,
+        srt_play_port: Number(form.srt_play_port) || 7865,
         rtmp_port: Number(form.rtmp_port) || 1935,
         https: !!form.https,
         password: form.password === "" && cfg?.has_password ? null : form.password,
@@ -161,7 +165,7 @@ export default function Settings() {
     if (!window.confirm("Clear stored Flussonic connection settings?")) return;
     await api.post("/config/flussonic/clear");
     await loadAll();
-    setForm({ url: "", user: "", password: "", api_path: "", public_host: "", srt_port: 9998, rtmp_port: 1935, https: true });
+    setForm({ url: "", user: "", password: "", api_path: "", public_host: "", srt_port: 9998, srt_publish_port: 3525, srt_play_port: 7865, rtmp_port: 1935, https: true });
     setTestResult(null);
     setTouched(false);
   };
@@ -300,13 +304,24 @@ export default function Settings() {
                 />
               </div>
               <div className="col-span-6">
-                <label className="text-xs font-medium text-[var(--text-2)] block mb-1.5">SRT port</label>
+                <label className="text-xs font-medium text-[var(--text-2)] block mb-1.5">SRT publish port <span className="text-[var(--muted)] font-normal">· encoder push</span></label>
                 <input
-                  data-testid="config-srt-port-input"
+                  data-testid="config-srt-publish-port-input"
                   type="number" min="1" max="65535"
-                  value={form.srt_port}
-                  onChange={(e) => onField("srt_port", e.target.value)}
-                  placeholder="9998"
+                  value={form.srt_publish_port}
+                  onChange={(e) => onField("srt_publish_port", e.target.value)}
+                  placeholder="3525"
+                  className="w-full px-3.5 py-2.5 text-sm mono"
+                />
+              </div>
+              <div className="col-span-6">
+                <label className="text-xs font-medium text-[var(--text-2)] block mb-1.5">SRT play port <span className="text-[var(--muted)] font-normal">· viewer pull</span></label>
+                <input
+                  data-testid="config-srt-play-port-input"
+                  type="number" min="1" max="65535"
+                  value={form.srt_play_port}
+                  onChange={(e) => onField("srt_play_port", e.target.value)}
+                  placeholder="7865"
                   className="w-full px-3.5 py-2.5 text-sm mono"
                 />
               </div>
@@ -314,7 +329,12 @@ export default function Settings() {
                 These are used to build the playback / publish URLs shown on each stream
                 (<span className="mono">https://HOST/STREAM/index.m3u8</span>,
                 <span className="mono"> rtmp://HOST/STREAM</span>,
-                <span className="mono"> srt://HOST:PORT?streamid=STREAM</span>).
+                <span className="mono"> srt://HOST:PUBLISH_PORT?streamid=publish:STREAM</span> for encoders,
+                <span className="mono"> srt://HOST:PLAY_PORT?streamid=STREAM</span> for viewers).
+                <br />
+                In <span className="mono">flussonic.conf</span> use:
+                <span className="mono"> srt_publish &#123; port {form.srt_publish_port || 3525}; &#125;</span>
+                <span className="mono"> srt_play &#123; port {form.srt_play_port || 7865}; &#125;</span>
               </p>
             </div>
           </details>

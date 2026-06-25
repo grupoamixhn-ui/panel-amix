@@ -182,6 +182,8 @@ class FlussonicConfigIn(BaseModel):
     api_path: str | None = None
     public_host: str | None = None
     srt_port: int | None = None
+    srt_publish_port: int | None = None
+    srt_play_port: int | None = None
     rtmp_port: int | None = None
     https: bool | None = None
 
@@ -522,6 +524,8 @@ async def config_put(body: FlussonicConfigIn, user=Depends(get_current_user)):
         url=body.url, user=body.user, password=body.password,
         api_path=body.api_path,
         public_host=body.public_host, srt_port=body.srt_port,
+        srt_publish_port=body.srt_publish_port,
+        srt_play_port=body.srt_play_port,
         rtmp_port=body.rtmp_port, https=body.https,
     )
     return await flussonic.get_public_config()
