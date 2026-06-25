@@ -775,14 +775,65 @@ def _host_from_url(url: str) -> str:
     return s.split("/")[0].split(":")[0]
 
 
+# Tiny in-process cache for ports auto-detected from Flussonic's /config
+_PORT_CACHE: dict[str, Any] = {"data": None, "expires": 0.0}
+
+
+async def detect_flussonic_ports() -> dict[str, int]:
+    """Read Flussonic's running config and extract real SRT / RTMP ports.
+
+    Returns {"srt_port": N, "rtmp_port": N, "srt_publish_port": N, "srt_play_port": N}
+    or empty dict if not reachable. Cached for 30 s to avoid hammering /config.
+    """
+    import time as _t
+    now = _t.time()
+    if _PORT_CACHE["data"] is not None and _PORT_CACHE["expires"] > now:
+        return _PORT_CACHE["data"]  # type: ignore[return-value]
+
+    cfg = await _active_config()
+    if not cfg["url"]:
+        return {}
+    out: dict[str, int] = {}
+    try:
+        async with _make_client(cfg) as c:
+            r = await c.get(f"{cfg['api_path']}/config")
+            if r.status_code != 200:
+                return {}
+            d = r.json() if r.content else {}
+            if isinstance(d, dict):
+                # Flussonic returns `srt: PORT` (single port for both directions) or
+                # explicit `srt_publish` / `srt_play` blocks.
+                srt_combined = d.get("srt")
+                if isinstance(srt_combined, int):
+                    out["srt_port"] = srt_combined
+                    out["srt_publish_port"] = srt_combined
+                    out["srt_play_port"] = srt_combined
+                if isinstance(d.get("srt_publish"), dict) and "port" in d["srt_publish"]:
+                    out["srt_publish_port"] = int(d["srt_publish"]["port"])
+                if isinstance(d.get("srt_play"), dict) and "port" in d["srt_play"]:
+                    out["srt_play_port"] = int(d["srt_play"]["port"])
+                if isinstance(d.get("rtmp"), int):
+                    out["rtmp_port"] = d["rtmp"]
+    except Exception:  # noqa: BLE001
+        return {}
+    _PORT_CACHE["data"] = out
+    _PORT_CACHE["expires"] = now + 30
+    return out
+
+
+
 async def stream_outputs(name: str) -> dict[str, Any]:
     """Return ready-to-share playback URLs for a stream."""
     cfg = await _active_config()
     host = cfg["public_host"] or _host_from_url(cfg["url"]) or "your-flussonic-host"
     scheme = "https" if cfg["https"] else "http"
-    rtmp_p = cfg["rtmp_port"]
-    srt_play_p = cfg["srt_play_port"]
-    srt_pub_p = cfg["srt_publish_port"]
+    # Auto-detect ports from Flussonic config (cached 30s). Saved values in MongoDB
+    # win only if the operator explicitly customized them; otherwise we follow
+    # whatever Flussonic actually has running.
+    detected = await detect_flussonic_ports()
+    rtmp_p = detected.get("rtmp_port") or cfg["rtmp_port"]
+    srt_play_p = detected.get("srt_play_port") or cfg["srt_play_port"]
+    srt_pub_p = detected.get("srt_publish_port") or cfg["srt_publish_port"]
     rtmp_host = f"{host}:{rtmp_p}" if rtmp_p not in (1935,) else host
 
     # Fetch publish_password (if any) for this stream

@@ -336,6 +336,28 @@ export default function Settings() {
                 <span className="mono"> srt_publish &#123; port {form.srt_publish_port || 3525}; &#125;</span>
                 <span className="mono"> srt_play &#123; port {form.srt_play_port || 7865}; &#125;</span>
               </p>
+              <div className="col-span-12 mt-1">
+                <button
+                  type="button"
+                  data-testid="config-detect-ports-btn"
+                  onClick={async () => {
+                    try {
+                      const r = await api.get("/config/flussonic/detect-ports");
+                      const d = r.data || {};
+                      if (d.srt_publish_port) onField("srt_publish_port", d.srt_publish_port);
+                      if (d.srt_play_port) onField("srt_play_port", d.srt_play_port);
+                      if (d.srt_port) onField("srt_port", d.srt_port);
+                      if (d.rtmp_port) onField("rtmp_port", d.rtmp_port);
+                      setTestResult({ ok: true, msg: `Auto-detected: SRT ${d.srt_port || "?"} · RTMP ${d.rtmp_port || "?"}` });
+                    } catch (e) {
+                      setTestResult({ ok: false, msg: e.response?.data?.detail || e.message });
+                    }
+                  }}
+                  className="btn btn-secondary text-xs"
+                >
+                  Auto-detect ports from Flussonic
+                </button>
+              </div>
             </div>
           </details>
 

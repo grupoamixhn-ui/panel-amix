@@ -152,13 +152,58 @@ function OutputsPreview({ name }) {
   );
 }
 
+// ---------- Detect typeId + fields from an existing stream's source URL ----------
+function detectType(initial) {
+  if (!initial) return { typeId: "srt-pull", fields: { port: 9999 } };
+  const inputs = initial.inputs || [];
+  const src = (inputs[0]?.url || "").trim();
+
+  // Empty inputs (or publish://) → publish-receive stream (SRT/RTMP listen)
+  if (inputs.length === 0 || src === "publish://" || src.startsWith("publish://")) {
+    return { typeId: "srt-listen", fields: {} };
+  }
+  if (src.startsWith("srt://")) {
+    try {
+      const u = new URL(src);
+      return { typeId: "srt-pull", fields: { host: u.hostname, port: u.port || 9999, streamid: u.searchParams.get("streamid") || "" } };
+    } catch { return { typeId: "custom", fields: { url: src } }; }
+  }
+  if (src.startsWith("rtmp://")) {
+    try {
+      const u = new URL(src);
+      const segs = u.pathname.split("/").filter(Boolean);
+      return { typeId: "rtmp-pull", fields: { host: u.hostname, app: segs[0] || "", key: segs.slice(1).join("/") || "" } };
+    } catch { return { typeId: "custom", fields: { url: src } }; }
+  }
+  if (src.startsWith("rtsp://")) {
+    try {
+      const u = new URL(src);
+      return { typeId: "rtsp", fields: { host: u.hostname, port: u.port || "", path: u.pathname.replace(/^\//, "") } };
+    } catch { return { typeId: "custom", fields: { url: src } }; }
+  }
+  if (src.startsWith("udp://")) {
+    try {
+      const u = new URL(src);
+      return { typeId: "udp", fields: { host: u.hostname, port: u.port || 1234 } };
+    } catch { return { typeId: "custom", fields: { url: src } }; }
+  }
+  if (src.startsWith("file://")) {
+    return { typeId: "file", fields: { path: src.replace(/^file:\/\//, "") } };
+  }
+  if (src.includes("m3u8") || src.endsWith(".m3u")) {
+    return { typeId: "hls-pull", fields: { url: src } };
+  }
+  return { typeId: "custom", fields: { url: src } };
+}
+
 // ---------- Main wizard component ----------
 export default function StreamWizard({ initial, onClose, onSaved, onDeleted }) {
   const editing = !!initial?.name;
+  const detected = useMemo(() => detectType(initial), [initial]);
   const [name, setName] = useState(initial?.name || "");
   const [title, setTitle] = useState(initial?.title || "");
-  const [typeId, setTypeId] = useState(initial ? "custom" : "srt-pull");
-  const [fields, setFields] = useState(initial ? { url: initial?.inputs?.[0]?.url || "" } : { port: 9999 });
+  const [typeId, setTypeId] = useState(detected.typeId);
+  const [fields, setFields] = useState(detected.fields);
   const [publishPassword, setPublishPassword] = useState(initial?.publish_password || "");
   const [maxBitrateKbps, setMaxBitrateKbps] = useState(initial?.max_bitrate_kbps || 0);
   const [sourceTimeout, setSourceTimeout] = useState(initial?.source_timeout || 60);

@@ -531,6 +531,12 @@ async def config_put(body: FlussonicConfigIn, user=Depends(get_current_user)):
     return await flussonic.get_public_config()
 
 
+@api.get("/config/flussonic/detect-ports")
+async def config_detect_ports(user=Depends(get_current_user)):
+    """Auto-detect SRT / RTMP ports from the live Flussonic /config endpoint."""
+    return await flussonic.detect_flussonic_ports()
+
+
 @api.post("/config/flussonic/test")
 async def config_test(body: FlussonicTestIn, user=Depends(get_current_user)):
     pwd = body.password
