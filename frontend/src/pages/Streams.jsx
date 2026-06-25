@@ -141,6 +141,7 @@ function AdminStreams() {
                       {(() => {
                         const url = s.inputs?.[0]?.url || "";
                         const isPublish = url.startsWith("publish://");
+                        const hasFlow = s.alive || (s.bitrate || 0) > 0;
                         if (isPublish && s.publisher_ip) {
                           const proto = (s.publisher_proto || "").toUpperCase();
                           const badgeColor = proto === "RTMP" ? "bg-orange-50 text-orange-700 border-orange-200"
@@ -150,6 +151,14 @@ function AdminStreams() {
                             <span className="flex items-center gap-1.5">
                               <span className={`inline-block text-[9px] px-1.5 py-0.5 rounded border font-semibold tracking-wider ${badgeColor}`}>{proto || "PUSH"}</span>
                               <span className="text-[var(--text-2)]" title={`Publisher IP: ${s.publisher_ip}`}>{s.publisher_ip}</span>
+                            </span>
+                          );
+                        }
+                        if (isPublish && hasFlow) {
+                          return (
+                            <span className="flex items-center gap-1.5">
+                              <span className="inline-block text-[9px] px-1.5 py-0.5 rounded border font-semibold tracking-wider bg-emerald-50 text-emerald-700 border-emerald-200">PUSH</span>
+                              <span className="text-[var(--text-2)]">publisher connected</span>
                             </span>
                           );
                         }

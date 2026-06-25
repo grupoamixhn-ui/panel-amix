@@ -662,6 +662,15 @@ async def config_detect_ports(user=Depends(get_current_user)):
     return await flussonic.detect_flussonic_ports()
 
 
+@api.get("/config/flussonic/raw")
+async def config_flussonic_raw(user=Depends(get_current_user)):
+    """Admin-only — dump the raw /config JSON so we can see exactly which keys
+    your Flussonic version exposes (useful when port auto-detection misses them)."""
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    return await flussonic.fetch_raw_flussonic_config()
+
+
 @api.post("/config/flussonic/test")
 async def config_test(body: FlussonicTestIn, user=Depends(get_current_user)):
     pwd = body.password

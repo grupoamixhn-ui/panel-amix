@@ -41,12 +41,23 @@ function StatusBadge({ s }) {
 function SourceProto({ s }) {
   const url = s.inputs?.[0]?.url || "";
   const isPub = url.startsWith("publish://");
+  const hasFlow = s.alive || (s.bitrate || 0) > 0;
   if (isPub && s.publisher_ip) {
     const proto = (s.publisher_proto || "").toUpperCase();
     return (
       <span className="text-[10px] mono text-slate-500">
         <span className={`${proto === "RTMP" ? "text-orange-600" : proto === "SRT" ? "text-purple-600" : "text-slate-700"} font-bold`}>{proto || "PUSH"}</span>
         <span className="mx-1.5 opacity-50">·</span>{s.publisher_ip}
+      </span>
+    );
+  }
+  if (isPub && hasFlow) {
+    // Publisher IS connected (we see traffic) but Flussonic didn't expose its IP.
+    // Show a positive indicator instead of the misleading "waiting" message.
+    return (
+      <span className="text-[10px] mono text-slate-500">
+        <span className="text-emerald-600 font-bold">PUSH</span>
+        <span className="mx-1.5 opacity-50">·</span>publisher connected
       </span>
     );
   }

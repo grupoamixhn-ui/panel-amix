@@ -859,6 +859,9 @@ async def detect_flussonic_ports() -> dict[str, int]:
 
     Returns {"srt_port": N, "rtmp_port": N, "srt_publish_port": N, "srt_play_port": N}
     or empty dict if not reachable. Cached for 30 s to avoid hammering /config.
+
+    Flussonic v23/v24/v25 expose this in several different shapes; we probe all
+    of them defensively.
     """
     import time as _t
     now = _t.time()
@@ -869,6 +872,24 @@ async def detect_flussonic_ports() -> dict[str, int]:
     if not cfg["url"]:
         return {}
     out: dict[str, int] = {}
+
+    def _port_of(value: Any) -> int | None:
+        """Extract a port from any of: int, str(int), {"port": N}, [{"port": N}, ...]."""
+        if isinstance(value, bool):
+            return None
+        if isinstance(value, int):
+            return value
+        if isinstance(value, str) and value.strip().isdigit():
+            return int(value.strip())
+        if isinstance(value, dict):
+            for k in ("port", "listen", "bind"):
+                p = _port_of(value.get(k))
+                if p:
+                    return p
+        if isinstance(value, list) and value:
+            return _port_of(value[0])
+        return None
+
     try:
         async with _make_client(cfg) as c:
             r = await c.get(f"{cfg['api_path']}/config")
@@ -876,24 +897,106 @@ async def detect_flussonic_ports() -> dict[str, int]:
                 return {}
             d = r.json() if r.content else {}
             if isinstance(d, dict):
-                # Flussonic returns `srt: PORT` (single port for both directions) or
-                # explicit `srt_publish` / `srt_play` blocks.
-                srt_combined = d.get("srt")
-                if isinstance(srt_combined, int):
+                # 1) Plain `srt: N` or `srt: {port: N}` (single port handles both modes)
+                srt_combined = _port_of(d.get("srt"))
+                if srt_combined:
                     out["srt_port"] = srt_combined
                     out["srt_publish_port"] = srt_combined
                     out["srt_play_port"] = srt_combined
-                if isinstance(d.get("srt_publish"), dict) and "port" in d["srt_publish"]:
-                    out["srt_publish_port"] = int(d["srt_publish"]["port"])
-                if isinstance(d.get("srt_play"), dict) and "port" in d["srt_play"]:
-                    out["srt_play_port"] = int(d["srt_play"]["port"])
-                if isinstance(d.get("rtmp"), int):
-                    out["rtmp_port"] = d["rtmp"]
+
+                # 2) Dedicated publish/play blocks (any shape)
+                for key, target in (
+                    ("srt_publish", "srt_publish_port"),
+                    ("srt_play", "srt_play_port"),
+                    # legacy aliases occasionally seen in user-edited configs
+                    ("srt_input", "srt_publish_port"),
+                    ("srt_output", "srt_play_port"),
+                ):
+                    p = _port_of(d.get(key))
+                    if p:
+                        out[target] = p
+
+                # 3) Some installs expose the listeners array `listen` instead of named blocks
+                for lst_key in ("listen", "listeners"):
+                    listeners = d.get(lst_key)
+                    # Newer Flussonic uses listeners as a dict keyed by protocol:
+                    #   {"http": [{"port": 80}], "rtmp": [{"port": 1935}], "srt": [{"port": 9998, "role": "publish"}]}
+                    if isinstance(listeners, dict):
+                        for proto_name, entries in listeners.items():
+                            proto = proto_name.lower()
+                            if not isinstance(entries, list):
+                                entries = [entries]
+                            for entry in entries:
+                                port = _port_of(entry)
+                                if not port:
+                                    continue
+                                role = ""
+                                if isinstance(entry, dict):
+                                    role = (entry.get("role") or entry.get("direction") or "").lower()
+                                if proto == "rtmp":
+                                    out["rtmp_port"] = port
+                                elif proto == "srt":
+                                    if role in ("publish", "input", "in"):
+                                        out["srt_publish_port"] = port
+                                    elif role in ("play", "output", "out"):
+                                        out["srt_play_port"] = port
+                                    else:
+                                        out.setdefault("srt_port", port)
+                                        out.setdefault("srt_publish_port", port)
+                                        out.setdefault("srt_play_port", port)
+                    elif isinstance(listeners, list):
+                        for entry in listeners:
+                            if not isinstance(entry, dict):
+                                continue
+                            proto = (entry.get("proto") or entry.get("protocol") or "").lower()
+                            role = (entry.get("role") or entry.get("direction") or "").lower()
+                            port = _port_of(entry.get("port") or entry)
+                            if not port:
+                                continue
+                            if proto == "rtmp":
+                                out["rtmp_port"] = port
+                            elif proto == "srt":
+                                if role in ("publish", "input", "in"):
+                                    out["srt_publish_port"] = port
+                                elif role in ("play", "output", "out"):
+                                    out["srt_play_port"] = port
+                                else:
+                                    out.setdefault("srt_port", port)
+                                    out.setdefault("srt_publish_port", port)
+                                    out.setdefault("srt_play_port", port)
+
+                # 4) RTMP port
+                rtmp_p = _port_of(d.get("rtmp"))
+                if rtmp_p:
+                    out["rtmp_port"] = rtmp_p
+
+                # 5) Fallback: if we found play but not publish (or vice versa),
+                # mirror so the UI never shows zero.
+                if "srt_play_port" in out and "srt_publish_port" not in out:
+                    out["srt_publish_port"] = out["srt_play_port"]
+                if "srt_publish_port" in out and "srt_play_port" not in out:
+                    out["srt_play_port"] = out["srt_publish_port"]
+                if "srt_port" not in out and ("srt_publish_port" in out or "srt_play_port" in out):
+                    out["srt_port"] = out.get("srt_publish_port") or out["srt_play_port"]
     except Exception:  # noqa: BLE001
         return {}
     _PORT_CACHE["data"] = out
     _PORT_CACHE["expires"] = now + 30
     return out
+
+
+async def fetch_raw_flussonic_config() -> dict[str, Any]:
+    """Return the raw /config payload — admin-only debug aid."""
+    cfg = await _active_config()
+    if not cfg["url"]:
+        return {"error": "Flussonic not configured"}
+    try:
+        async with _make_client(cfg) as c:
+            r = await c.get(f"{cfg['api_path']}/config")
+            r.raise_for_status()
+            return {"status": r.status_code, "data": r.json() if r.content else {}}
+    except Exception as e:  # noqa: BLE001
+        return {"error": f"{type(e).__name__}: {e}"}
 
 
 
