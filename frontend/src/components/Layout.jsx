@@ -162,12 +162,12 @@ export default function Layout({ children }) {
 
   return (
     <div className="min-h-screen flex relative z-10">
-      {/* Desktop sidebar */}
+      {/* Desktop sidebar (≥md) — vertical */}
       <aside className="hidden md:flex w-64 border-r border-[var(--border)] bg-[var(--surface)] flex-col">
         {SidebarBody}
       </aside>
 
-      {/* Mobile drawer */}
+      {/* Mobile drawer (used by the "More" button — hidden by default) */}
       {mobileOpen && (
         <div
           className="md:hidden fixed inset-0 z-50 bg-black/40 backdrop-blur-sm"
@@ -185,17 +185,9 @@ export default function Layout({ children }) {
         {SidebarBody}
       </aside>
 
-      <main className="flex-1 min-w-0 overflow-x-hidden bg-[var(--bg)]">
-        {/* Mobile top bar with hamburger */}
-        <div className="md:hidden sticky top-0 z-30 flex items-center gap-3 px-4 py-3 bg-[var(--surface)]/95 backdrop-blur-md border-b border-[var(--border)]">
-          <button
-            onClick={() => setMobileOpen(true)}
-            data-testid="mobile-menu-btn"
-            className="p-2 -ml-1 rounded-lg text-[var(--text-2)] hover:bg-[var(--surface-2)] active:scale-95 transition"
-            aria-label="Open menu"
-          >
-            <Menu className="w-5 h-5" />
-          </button>
+      <main className="flex-1 min-w-0 overflow-x-hidden bg-[var(--bg)] flex flex-col">
+        {/* Mobile top bar — compact header with brand + connection dot */}
+        <div className="md:hidden sticky top-0 z-30 flex items-center gap-3 px-4 py-2.5 bg-[var(--surface)]/95 backdrop-blur-md border-b border-[var(--border)]">
           {logo_data_uri ? (
             <img src={logo_data_uri} alt={displayBrand} className="h-7 max-w-[120px] object-contain" />
           ) : (
@@ -205,10 +197,61 @@ export default function Layout({ children }) {
           )}
           <div className="flex-1 min-w-0">
             <div className="text-sm font-semibold truncate">{currentTitle}</div>
+            <div className="text-[10px] text-[var(--muted)] truncate">
+              {connected ? `${info?.streams_live ?? 0}/${info?.streams_total ?? 0} streams · ${info?.clients ?? 0} viewers` : "Not connected"}
+            </div>
           </div>
-          <span className={`dot ${connected ? "dot-live" : "dot-warn"}`} />
+          <button
+            onClick={async () => { await logout(); nav("/login"); }}
+            data-testid="mobile-logout-btn"
+            className="p-2 rounded-lg text-[var(--muted)] hover:text-[var(--error)] hover:bg-[var(--surface-2)] active:scale-95 transition"
+            aria-label="Logout"
+            title="Logout"
+          >
+            <LogOut className="w-4.5 h-4.5" />
+          </button>
         </div>
-        {children}
+
+        <div className="flex-1 pb-[72px] md:pb-0">{children}</div>
+
+        {/* Mobile bottom nav — horizontal, fixed, identical in portrait & landscape.
+            Scrolls horizontally if too many items to fit. */}
+        <nav
+          className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-[var(--surface)]/98 backdrop-blur-lg border-t border-[var(--border)] shadow-[0_-4px_12px_rgba(0,0,0,0.04)]"
+          data-testid="mobile-bottom-nav"
+          style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+        >
+          <div className="flex overflow-x-auto no-scrollbar" style={{ scrollbarWidth: "none" }}>
+            {navItems.map(({ to, label, icon: Icon, end, tid }) => (
+              <NavLink
+                key={to}
+                to={to}
+                end={end}
+                data-testid={`mob-${tid}`}
+                className={({ isActive }) =>
+                  `flex flex-col items-center justify-center gap-0.5 px-3 py-2 flex-1 min-w-[64px] text-[10px] font-medium transition relative ${
+                    isActive
+                      ? "text-[var(--primary)]"
+                      : "text-[var(--muted)] hover:text-[var(--text-2)]"
+                  }`
+                }
+              >
+                {({ isActive }) => (
+                  <>
+                    {isActive && (
+                      <span className="absolute top-0 left-1/2 -translate-x-1/2 h-0.5 w-8 bg-[var(--primary)] rounded-b" />
+                    )}
+                    <Icon className="w-5 h-5" strokeWidth={isActive ? 2.5 : 2} />
+                    <span className="leading-tight truncate max-w-[60px]">{label}</span>
+                    {to === "/settings" && updateAvailable && (
+                      <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-[var(--primary)]" />
+                    )}
+                  </>
+                )}
+              </NavLink>
+            ))}
+          </div>
+        </nav>
       </main>
     </div>
   );

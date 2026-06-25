@@ -80,8 +80,8 @@ export default function Dashboard() {
           <KpiCell icon={Clock} label="Uptime" value={fmtUptime(info?.uptime || 0)} hint="live · auto refresh 5s" testId="kpi-uptime" />
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <div className="cell p-5 lg:col-span-2" data-testid="chart-viewers">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="cell p-5" data-testid="chart-viewers">
             <div className="flex items-center justify-between mb-4">
               <div>
                 <div className="label">Concurrent viewers</div>

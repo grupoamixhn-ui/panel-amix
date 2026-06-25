@@ -175,3 +175,7 @@ body::after {
 
 /* Gradient line */
 .grad-line { height: 1px; background: linear-gradient(90deg, transparent, var(--border-strong), transparent); }
+
+/* Hide native scrollbar (used by mobile bottom-nav with overflow-x-auto) */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
