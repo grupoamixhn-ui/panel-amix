@@ -453,6 +453,24 @@ async def streams_get(name: str, user=Depends(get_current_user)):
         raise HTTPException(status_code=404, detail="Stream not found")
     return s
 
+@api.get("/streams/{name}/raw")
+async def streams_get_raw(name: str, user=Depends(get_current_user)):
+    """Admin-only debug endpoint — returns the unmodified Flussonic payload so we
+    can see exactly which fields a particular server version exposes for a stream."""
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    cfg = await flussonic._active_config()
+    async with flussonic._make_client(cfg) as c:
+        for path in (f"/streamer/api/v3/streams/{name}", f"/flussonic/api/v3/streams/{name}"):
+            try:
+                r = await c.get(path)
+                if r.status_code == 200:
+                    return {"path": path, "data": r.json()}
+            except Exception:  # noqa: BLE001
+                continue
+    raise HTTPException(status_code=502, detail="Flussonic did not return raw stream data")
+
+
 @api.put("/streams/{name}")
 async def streams_update(name: str, body: StreamUpdateIn, user=Depends(get_current_user)):
     s = await flussonic.update_stream(name, body.model_dump(exclude_none=True))

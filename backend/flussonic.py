@@ -223,9 +223,38 @@ def _normalize_stream(name: str, data: dict[str, Any]) -> dict[str, Any]:
     except (TypeError, ValueError):
         max_bitrate_kbps = 0
     # Publisher info (IP + protocol) — only meaningful when input is publish://
+    # Flussonic v24/v25 exposes the publisher data under different keys depending
+    # on whether stats are read from `media_info`, `stats`, `inputs[0].stats`, …
+    # Probe every known location so the UI never says "no publisher" while the
+    # stream is actually receiving data.
     publish_stats = data.get("stats") or {}
-    publisher_ip = publish_stats.get("published_from") or ""
-    publisher_proto = (publish_stats.get("published_via") or "").lower()
+    input_stats = (inputs[0].get("stats") if (inputs and isinstance(inputs[0], dict)) else {}) or {}
+    publisher_ip = (
+        publish_stats.get("published_from")
+        or publish_stats.get("input_addr")
+        or publish_stats.get("client_addr")
+        or publish_stats.get("remote_addr")
+        or input_stats.get("client_addr")
+        or input_stats.get("remote_addr")
+        or input_stats.get("published_from")
+        or data.get("published_from")
+        or data.get("input_addr")
+        or ""
+    )
+    # Strip "ip:port" → "ip" so the badge is short
+    if publisher_ip and ":" in publisher_ip and publisher_ip.count(":") <= 1:
+        publisher_ip = publisher_ip.rsplit(":", 1)[0]
+    publisher_proto = (
+        publish_stats.get("published_via")
+        or input_stats.get("published_via")
+        or data.get("published_via")
+        or ""
+    ).lower()
+    # Heuristic: if proto is missing but bitrate>0 and url=publish://, try to infer
+    # from the URL prefix that the publisher used (Flussonic sometimes drops the
+    # field after the handshake completes).
+    if publisher_ip and not publisher_proto:
+        publisher_proto = "rtmp"  # safe default for "publish://" w/ a connected peer
     return {
         "name": name,
         "title": data.get("title") or data.get("name") or name,

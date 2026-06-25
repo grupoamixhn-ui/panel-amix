@@ -17,10 +17,9 @@ function statusPill(s) {
 }
 
 export default function Streams() {
-  const { user } = useAuth();
-  // Clients get a card-based UX optimised for non-technical users.
-  if (user?.role === "client") return <ClientStreamsView />;
-  return <AdminStreams />;
+  // All roles get the modern card-based UX. The component reads useAuth() to
+  // toggle admin-only actions (New stream, Edit, Delete) internally.
+  return <ClientStreamsView />;
 }
 
 function AdminStreams() {

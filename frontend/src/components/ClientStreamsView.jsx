@@ -5,10 +5,12 @@ import OutputsModal from "./OutputsModal";
 import StreamClientsModal from "./StreamClientsModal";
 import StreamLiveMonitor from "./StreamLiveMonitor";
 import PushTargetsModal from "./PushTargetsModal";
+import StreamWizard from "./StreamWizard";
 import HlsPlayer from "./HlsPlayer";
+import { useAuth } from "../auth";
 import {
   Search, Activity, Send, Users, Share2, Wifi, Clock, RotateCw, Tv2, Play,
-  Eye, EyeOff, LayoutGrid, List, Radio, Zap,
+  Eye, EyeOff, LayoutGrid, List, Radio, Zap, Plus, Pencil, Trash2,
 } from "lucide-react";
 
 function StatusBadge({ s }) {
@@ -57,7 +59,7 @@ function SourceProto({ s }) {
   return null;
 }
 
-function StreamCard({ s, onMonitor, onPush, onOutputs, onClients, onReset, resetting }) {
+function StreamCard({ s, onMonitor, onPush, onOutputs, onClients, onReset, onEdit, onDelete, resetting, canManage }) {
   const [showPreview, setShowPreview] = useState(false);
   const [hlsUrl, setHlsUrl] = useState("");
   const [hlsLoading, setHlsLoading] = useState(false);
@@ -186,22 +188,40 @@ function StreamCard({ s, onMonitor, onPush, onOutputs, onClients, onReset, reset
           </button>
         </div>
 
-        <button
-          onClick={onReset}
-          disabled={resetting}
-          className="mt-2 w-full px-3 py-2 text-[10px] font-semibold uppercase tracking-wider rounded-lg text-[var(--muted)] hover:text-amber-600 hover:bg-amber-50 transition flex items-center justify-center gap-1.5"
-          title="Reset · kick viewers & reconnect source"
-          data-testid={`card-reset-${s.name}`}
-        >
-          <RotateCw className={`w-3 h-3 ${resetting ? "animate-spin" : ""}`} />
-          {resetting ? "Resetting…" : "Reset stream"}
-        </button>
+        <div className="mt-2 flex items-center gap-1.5">
+          <button
+            onClick={onReset}
+            disabled={resetting}
+            className="flex-1 px-3 py-2 text-[10px] font-semibold uppercase tracking-wider rounded-lg text-[var(--muted)] hover:text-amber-600 hover:bg-amber-50 transition flex items-center justify-center gap-1.5"
+            title="Reset · kick viewers & reconnect source"
+            data-testid={`card-reset-${s.name}`}
+          >
+            <RotateCw className={`w-3 h-3 ${resetting ? "animate-spin" : ""}`} />
+            {resetting ? "Resetting…" : "Reset"}
+          </button>
+          {canManage && (
+            <>
+              <button
+                onClick={onEdit}
+                className="px-3 py-2 rounded-lg text-[var(--muted)] hover:text-[var(--primary)] hover:bg-[var(--primary-soft)] transition"
+                title="Edit stream"
+                data-testid={`card-edit-${s.name}`}
+              ><Pencil className="w-3.5 h-3.5" /></button>
+              <button
+                onClick={onDelete}
+                className="px-3 py-2 rounded-lg text-[var(--muted)] hover:text-[var(--error)] hover:bg-[var(--error-soft)] transition"
+                title="Delete stream"
+                data-testid={`card-delete-${s.name}`}
+              ><Trash2 className="w-3.5 h-3.5" /></button>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );
 }
 
-function ListRow({ s, onMonitor, onPush, onOutputs, onClients, onReset, resetting }) {
+function ListRow({ s, onMonitor, onPush, onOutputs, onClients, onReset, onEdit, onDelete, resetting, canManage }) {
   return (
     <div className={`grid grid-cols-[1fr_auto_auto_auto_auto] items-center gap-4 px-5 py-3.5 hover:bg-[var(--surface-2)] transition ${s.alive ? "border-l-2 border-emerald-400" : "border-l-2 border-transparent"}`} data-testid={`stream-row-${s.name}`}>
       <div className="flex items-center gap-3 min-w-0">
@@ -228,16 +248,26 @@ function ListRow({ s, onMonitor, onPush, onOutputs, onClients, onReset, resettin
         <button onClick={onOutputs} className="w-8 h-8 rounded-md text-[var(--muted)] hover:bg-[var(--surface-2)] hover:text-cyan-600" title="URLs" data-testid={`row-urls-${s.name}`}><Share2 className="w-3.5 h-3.5 mx-auto" /></button>
         <button onClick={onClients} className="w-8 h-8 rounded-md text-[var(--muted)] hover:bg-[var(--surface-2)] hover:text-indigo-600" title="Viewers" data-testid={`row-viewers-${s.name}`}><Users className="w-3.5 h-3.5 mx-auto" /></button>
         <button onClick={onReset} disabled={resetting} className="w-8 h-8 rounded-md text-[var(--muted)] hover:bg-[var(--surface-2)] hover:text-amber-600" title="Reset" data-testid={`row-reset-${s.name}`}><RotateCw className={`w-3.5 h-3.5 mx-auto ${resetting ? "animate-spin" : ""}`} /></button>
+        {canManage && (
+          <>
+            <button onClick={onEdit} className="w-8 h-8 rounded-md text-[var(--muted)] hover:bg-[var(--primary-soft)] hover:text-[var(--primary)]" title="Edit" data-testid={`row-edit-${s.name}`}><Pencil className="w-3.5 h-3.5 mx-auto" /></button>
+            <button onClick={onDelete} className="w-8 h-8 rounded-md text-[var(--muted)] hover:bg-[var(--error-soft)] hover:text-[var(--error)]" title="Delete" data-testid={`row-delete-${s.name}`}><Trash2 className="w-3.5 h-3.5 mx-auto" /></button>
+          </>
+        )}
       </div>
     </div>
   );
 }
 
 export default function ClientStreamsView() {
+  const { user } = useAuth();
+  const canManage = user?.role !== "client";
   const [streams, setStreams] = useState([]);
   const [q, setQ] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [view, setView] = useState("grid");
+  const [wizardOpen, setWizardOpen] = useState(false);
+  const [editing, setEditing] = useState(null);
   const [outputsFor, setOutputsFor] = useState(null);
   const [clientsFor, setClientsFor] = useState(null);
   const [monitorFor, setMonitorFor] = useState(null);
@@ -270,6 +300,25 @@ export default function ClientStreamsView() {
     }
   };
 
+  const handleEdit = async (name) => {
+    try {
+      const r = await api.get(`/streams/${name}`);
+      setEditing(r.data);
+    } catch (e) {
+      window.alert(`Failed: ${e?.response?.data?.detail || e.message}`);
+    }
+  };
+
+  const handleDelete = async (name) => {
+    if (!window.confirm(`Delete stream "${name}"?\n\nThis is permanent.`)) return;
+    try {
+      await api.delete(`/streams/${name}`);
+      load();
+    } catch (e) {
+      window.alert(`Failed: ${e?.response?.data?.detail || e.message}`);
+    }
+  };
+
   const totals = useMemo(() => {
     const live = streams.filter((s) => s.alive).length;
     const viewers = streams.reduce((a, s) => a + (s.clients || 0), 0);
@@ -296,16 +345,27 @@ export default function ClientStreamsView() {
   return (
     <div data-testid="streams-page">
       <PageHeader
-        title="My streams"
+        title={canManage ? "Streams" : "My streams"}
         subtitle="Live broadcast control center"
         testId="streams-header"
         right={
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 ring-1 ring-emerald-200">
-            <span className="relative flex w-2 h-2">
-              <span className="absolute inset-0 rounded-full bg-emerald-500 animate-ping opacity-75" />
-              <span className="relative inline-flex w-2 h-2 rounded-full bg-emerald-500" />
-            </span>
-            <span className="text-xs font-bold text-emerald-700">{totals.live} live</span>
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 ring-1 ring-emerald-200">
+              <span className="relative flex w-2 h-2">
+                <span className="absolute inset-0 rounded-full bg-emerald-500 animate-ping opacity-75" />
+                <span className="relative inline-flex w-2 h-2 rounded-full bg-emerald-500" />
+              </span>
+              <span className="text-xs font-bold text-emerald-700">{totals.live} live</span>
+            </div>
+            {canManage && (
+              <button
+                onClick={() => setWizardOpen(true)}
+                className="btn btn-primary"
+                data-testid="new-stream-button"
+              >
+                <Plus className="w-3.5 h-3.5" /> New stream
+              </button>
+            )}
           </div>
         }
       />
@@ -425,7 +485,10 @@ export default function ClientStreamsView() {
                 onOutputs={() => setOutputsFor(s.name)}
                 onClients={() => setClientsFor(s.name)}
                 onReset={() => reset(s.name)}
+                onEdit={() => handleEdit(s.name)}
+                onDelete={() => handleDelete(s.name)}
                 resetting={!!resetting[s.name]}
+                canManage={canManage}
               />
             ))}
           </div>
@@ -440,7 +503,10 @@ export default function ClientStreamsView() {
                 onOutputs={() => setOutputsFor(s.name)}
                 onClients={() => setClientsFor(s.name)}
                 onReset={() => reset(s.name)}
+                onEdit={() => handleEdit(s.name)}
+                onDelete={() => handleDelete(s.name)}
                 resetting={!!resetting[s.name]}
+                canManage={canManage}
               />
             ))}
           </div>
@@ -451,6 +517,13 @@ export default function ClientStreamsView() {
       {clientsFor && (<StreamClientsModal streamName={clientsFor} onClose={() => setClientsFor(null)} />)}
       {monitorFor && (<StreamLiveMonitor streamName={monitorFor} onClose={() => setMonitorFor(null)} />)}
       {pushFor && (<PushTargetsModal streamName={pushFor} onClose={() => setPushFor(null)} />)}
+      {(wizardOpen || editing) && (
+        <StreamWizard
+          stream={editing}
+          onClose={() => { setWizardOpen(false); setEditing(null); }}
+          onSaved={() => { setWizardOpen(false); setEditing(null); load(); }}
+        />
+      )}
     </div>
   );
 }
