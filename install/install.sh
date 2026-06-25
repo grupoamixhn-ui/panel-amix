@@ -279,13 +279,20 @@ ProtectHome=yes
 PrivateTmp=yes
 # Spool dir for update tarballs uploaded via the panel.
 RuntimeDirectoryMode=0750
-ReadWritePaths=$APP_DIR /var/lib/flussonic-admin -/etc/letsencrypt
+ReadWritePaths=$APP_DIR -/var/lib/flussonic-admin -/etc/letsencrypt
+# systemd creates this dir automatically with the right owner (overrides for legacy installs)
+StateDirectory=flussonic-admin
+StateDirectoryMode=0750
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
 systemctl daemon-reload
+# Pre-create the state dirs (systemd will also create them via StateDirectory= but
+# legacy unit files won't have that directive — be defensive).
+install -d -o "$APP_USER" -g "$APP_USER" -m 0750 /var/lib/flussonic-admin
+install -d -o "$APP_USER" -g "$APP_USER" -m 0750 /var/lib/flussonic-admin/updates
 systemctl enable --now ${SERVICE_NAME} >/dev/null
 sleep 2
 if ! systemctl is-active --quiet ${SERVICE_NAME}; then
@@ -330,7 +337,8 @@ nginx -t && nginx -s reload
 EOF
 chmod 755 "$SSL_HELPER"
 
-# Spool directory for update tarballs uploaded through the panel
+# Spool directory for update tarballs uploaded through the panel (also created
+# earlier near `systemctl enable --now` — kept here for idempotency on re-runs).
 install -d -o "$APP_USER" -g "$APP_USER" -m 0750 /var/lib/flussonic-admin/updates
 
 # ---------- update helper (panel self-update via sudoers) --------------------
