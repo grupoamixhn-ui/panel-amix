@@ -203,16 +203,19 @@ def _normalize_stream(name: str, data: dict[str, Any]) -> dict[str, Any]:
         or data.get("bitrate")
         or 0
     )
-    # uptime in seconds — Flussonic sends `opened_at` as ms epoch and `lifetime` as ms
+    # uptime in seconds — Flussonic sends `opened_at` as ms epoch and `lifetime` as ms.
+    # When alive=true → real data session uptime; when running=true but alive=false (source
+    # unreachable, retrying) → fall back to "time since stream activated" so the UI shows
+    # how long this config has been trying instead of a useless 0.
+    import time as _t
     uptime = 0
-    if alive:
-        if isinstance(stats.get("lifetime"), (int, float)):
-            uptime = int(stats["lifetime"] / 1000)
-        elif isinstance(stats.get("opened_at"), (int, float)):
-            import time as _t
-            uptime = max(0, int(_t.time() - stats["opened_at"] / 1000))
-        else:
-            uptime = int(stats.get("uptime") or data.get("uptime") or 0)
+    running = bool(stats.get("running") or data.get("running"))
+    if alive and isinstance(stats.get("lifetime"), (int, float)) and stats["lifetime"] > 0:
+        uptime = int(stats["lifetime"] / 1000)
+    elif (alive or running) and isinstance(stats.get("opened_at"), (int, float)):
+        uptime = max(0, int(_t.time() - stats["opened_at"] / 1000))
+    else:
+        uptime = int(stats.get("uptime") or data.get("uptime") or 0)
     # Flussonic max_bitrate is in bits/second; expose as kbit/s to the UI
     raw_max_bitrate = data.get("max_bitrate") or 0
     try:
@@ -643,19 +646,32 @@ async def get_stream_live_stats(name: str) -> dict[str, Any] | None:
                 "bitrate_kbps": int(t.get("bitrate") or 0),
             }
 
+    # uptime: prefer lifetime (data session) when alive; fall back to opened_at delta.
+    import time as _t
+    alive_b = bool(stats.get("alive"))
+    running_b = bool(stats.get("running"))
+    uptime_s = 0
+    if alive_b and isinstance(stats.get("lifetime"), (int, float)) and stats["lifetime"] > 0:
+        uptime_s = int(stats["lifetime"] / 1000)
+    elif (alive_b or running_b) and isinstance(stats.get("opened_at"), (int, float)):
+        uptime_s = max(0, int(_t.time() - stats["opened_at"] / 1000))
+
+    # Bitrates: Flussonic v3 reports bandwidth in bits/sec under inputs_bandwidth /
+    # out_bandwidth / output_bandwidth. Convert input to kbps for the UI.
+    input_bps = int(stats.get("inputs_bandwidth") or stats.get("input_bitrate") or 0)
+    output_bps = int(stats.get("out_bandwidth") or stats.get("output_bandwidth") or 0)
+
     return {
         "ts": datetime.now(timezone.utc).isoformat(),
         "name": name,
-        "alive": bool(stats.get("alive")),
+        "alive": alive_b,
         "status": stats.get("status") or "",
-        "uptime_s": int(stats.get("uptime") or 0),
-        "clients": int(stats.get("client_count") or 0),
-        # Flussonic input_bitrate is already in kbit/s
-        "input_bitrate_kbps": int(stats.get("input_bitrate") or 0),
-        # out_bandwidth appears in bps; coerce to bps for the UI
-        "output_bandwidth_bps": int(stats.get("out_bandwidth") or 0),
-        "bytes_in": int(stats.get("bytes_in") or 0),
-        "bytes_out": int(stats.get("bytes_out") or 0),
+        "uptime_s": uptime_s,
+        "clients": int(stats.get("online_clients") or stats.get("client_count") or 0),
+        "input_bitrate_kbps": input_bps // 1000 if input_bps > 1000 else input_bps,
+        "output_bandwidth_bps": output_bps,
+        "bytes_in": int(stats.get("bytes_in") or stats.get("inputs_bytes") or 0),
+        "bytes_out": int(stats.get("bytes_out") or stats.get("playback_bytes") or 0),
         "video": video,
         "audio": audio,
         "publisher_ip": stats.get("published_from") or "",
