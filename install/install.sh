@@ -270,12 +270,16 @@ Restart=always
 RestartSec=3
 StandardOutput=journal
 StandardError=journal
-# hardening
-NoNewPrivileges=yes
-ProtectSystem=strict
+# hardening — relaxed so the backend can invoke its sudoers-allowed helpers
+# (flussonic-admin-ssl-helper, flussonic-admin-update, nginx -s reload, certbot).
+# Setting NoNewPrivileges=yes here would block sudo from elevating to root.
+NoNewPrivileges=no
+ProtectSystem=no
 ProtectHome=yes
-ReadWritePaths=$APP_DIR
 PrivateTmp=yes
+# Spool dir for update tarballs uploaded via the panel.
+RuntimeDirectoryMode=0750
+ReadWritePaths=$APP_DIR /var/lib/flussonic-admin /etc/letsencrypt
 
 [Install]
 WantedBy=multi-user.target
@@ -325,6 +329,9 @@ install -m 0600 "\$KEY_SRC"  "$SSL_KEY"
 nginx -t && nginx -s reload
 EOF
 chmod 755 "$SSL_HELPER"
+
+# Spool directory for update tarballs uploaded through the panel
+install -d -o "$APP_USER" -g "$APP_USER" -m 0750 /var/lib/flussonic-admin/updates
 
 # ---------- update helper (panel self-update via sudoers) --------------------
 UPDATE_HELPER="/usr/local/bin/flussonic-admin-update"

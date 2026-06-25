@@ -4,7 +4,16 @@ import PageHeader from "../components/PageHeader";
 import BrandingSection from "../components/BrandingSection";
 import SslSection from "../components/SslSection";
 import UpdateSection from "../components/UpdateSection";
-import { Zap, Cable, CheckCircle2, XCircle, Loader2, Trash2, Download, Copy, RefreshCw, Package, Users, AlertTriangle } from "lucide-react";
+import { Zap, Cable, CheckCircle2, XCircle, Loader2, Trash2, Download, Copy, RefreshCw, Package, Users, AlertTriangle, Image as ImageIcon, ArrowUpCircle, ShieldCheck, BookOpen } from "lucide-react";
+
+const TABS = [
+  { id: "branding",  label: "Branding",     icon: ImageIcon },
+  { id: "updates",   label: "Updates",      icon: ArrowUpCircle },
+  { id: "ssl",       label: "SSL",          icon: ShieldCheck },
+  { id: "connection",label: "Connection",   icon: Cable },
+  { id: "installer", label: "Installer",    icon: Package },
+  { id: "help",      label: "Reference",    icon: BookOpen },
+];
 
 export default function Settings() {
   const [info, setInfo] = useState(null);
@@ -19,6 +28,8 @@ export default function Settings() {
   const [rebuilding, setRebuilding] = useState(false);
   const [copied, setCopied] = useState("");
   const [limits, setLimits] = useState(null);
+  const [activeTab, setActiveTab] = useState(() => localStorage.getItem("settingsTab") || "branding");
+  useEffect(() => { localStorage.setItem("settingsTab", activeTab); }, [activeTab]);
   const [limitsForm, setLimitsForm] = useState({ max_sessions: 400, client_timeout: 60, cache_path: "/storage/flussonic/cache", cache_size: "1500G" });
   const [limitsSaving, setLimitsSaving] = useState(false);
   const [limitsSaved, setLimitsSaved] = useState(false);
@@ -206,19 +217,34 @@ export default function Settings() {
         }
       />
 
-      <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6">
-        {/* 2-column layout — branding/visual left, infra/integration right */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          <div className="lg:col-span-5 space-y-6">
-            <BrandingSection />
-          </div>
-          <div className="lg:col-span-7 space-y-6">
-            <UpdateSection />
+      <div className="p-4 md:p-8 max-w-5xl mx-auto space-y-5">
+        {/* Tabs */}
+        <div className="cell p-1.5 inline-flex flex-wrap gap-1 w-full overflow-x-auto" data-testid="settings-tabs">
+          {TABS.map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              onClick={() => setActiveTab(id)}
+              data-testid={`tab-${id}`}
+              className={`flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-lg transition whitespace-nowrap ${
+                activeTab === id
+                  ? "bg-[var(--primary)] text-white shadow-[0_4px_12px_-4px_var(--primary)]"
+                  : "text-[var(--text-2)] hover:bg-[var(--surface-2)]"
+              }`}
+            >
+              <Icon className="w-3.5 h-3.5" />
+              {label}
+            </button>
+          ))}
+        </div>
 
-            <SslSection />
+        {activeTab === "branding"   && <BrandingSection />}
+        {activeTab === "updates"    && <UpdateSection />}
+        {activeTab === "ssl"        && <SslSection />}
 
-        {/* Connection form */}
-        <div className="cell p-6" data-testid="settings-connection">
+        {activeTab === "connection" && (
+          <>
+            {/* Connection form */}
+            <div className="cell p-6" data-testid="settings-connection">
           <div className="flex items-center gap-3 mb-5">
             <div className="w-9 h-9 rounded-xl bg-[var(--primary-soft)] flex items-center justify-center">
               <Cable className="w-4.5 h-4.5 text-[var(--primary)]" />
@@ -449,7 +475,10 @@ export default function Settings() {
             </div>
           </div>
         </div>
+          </>
+        )}
 
+        {activeTab === "installer" && (<>
 
         {/* Self-hosted installer download */}
         {release && !release.unavailable && (
@@ -529,9 +558,9 @@ export default function Settings() {
             </p>
           </div>
         )}
+        </>)}
 
-          </div>
-        </div>
+        {activeTab === "help" && (<>
 
         {/* Quick references */}
         <div className="cell p-6" data-testid="settings-help">
@@ -579,6 +608,7 @@ export default function Settings() {
             ))}
           </ul>
         </div>
+        </>)}
       </div>
     </div>
   );
