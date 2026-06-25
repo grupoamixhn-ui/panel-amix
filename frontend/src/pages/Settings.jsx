@@ -18,7 +18,7 @@ export default function Settings() {
   const [rebuilding, setRebuilding] = useState(false);
   const [copied, setCopied] = useState("");
   const [limits, setLimits] = useState(null);
-  const [limitsForm, setLimitsForm] = useState({ max_sessions: 400, cache_path: "/storage/flussonic/cache", cache_size: "1500G" });
+  const [limitsForm, setLimitsForm] = useState({ max_sessions: 400, client_timeout: 60, cache_path: "/storage/flussonic/cache", cache_size: "1500G" });
   const [limitsSaving, setLimitsSaving] = useState(false);
   const [limitsSaved, setLimitsSaved] = useState(false);
   const [limitsError, setLimitsError] = useState("");
@@ -61,6 +61,7 @@ export default function Settings() {
         setLimits(r.data);
         setLimitsForm({
           max_sessions: r.data?.max_sessions ?? 400,
+          client_timeout: r.data?.client_timeout ?? 60,
           cache_path: r.data?.cache_path || "/storage/flussonic/cache",
           cache_size: r.data?.cache_size || "1500G",
         });
@@ -73,12 +74,14 @@ export default function Settings() {
     try {
       const r = await api.put("/server/limits", {
         max_sessions: Number(limitsForm.max_sessions) || 0,
+        client_timeout: Number(limitsForm.client_timeout) || 60,
         cache_path: limitsForm.cache_path,
         cache_size: limitsForm.cache_size,
       });
       setLimits(r.data);
       setLimitsForm({
         max_sessions: r.data.max_sessions,
+        client_timeout: r.data.client_timeout || 60,
         cache_path: r.data.cache_path || "/storage/flussonic/cache",
         cache_size: r.data.cache_size || "1500G",
       });
@@ -474,21 +477,22 @@ export default function Settings() {
                 </p>
               </div>
 
-              {/* Client timeout (read-only) */}
+              {/* Client timeout (saved locally, applied via flussonic.conf) */}
               <div>
                 <label className="text-xs font-medium text-[var(--text-2)] block mb-1.5 flex items-center gap-1.5">
-                  Client timeout
-                  <span className="text-[9px] uppercase tracking-wider bg-[var(--surface-2)] text-[var(--muted)] px-1.5 py-0.5 rounded">read-only</span>
+                  Client timeout (s)
+                  <span className="text-[9px] uppercase tracking-wider bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded">flussonic.conf only</span>
                 </label>
                 <input
-                  type="number"
-                  value={limits.client_timeout || 60}
-                  disabled
-                  className="w-full px-3 py-2.5 text-sm mono opacity-60 cursor-not-allowed"
+                  type="number" min="0" step="10"
+                  value={limitsForm.client_timeout}
+                  onChange={(e) => setLimitsForm({ ...limitsForm, client_timeout: e.target.value })}
+                  placeholder="60"
+                  className="w-full px-3 py-2.5 text-sm mono"
                   data-testid="server-limits-client-timeout"
                 />
                 <p className="text-[11px] text-[var(--muted)] mt-1.5 leading-snug">
-                  Not API-editable on Flussonic 24.x. Edit it in <span className="mono">/etc/flussonic/flussonic.conf</span>.
+                  Not API-editable on Flussonic 24.x. The value is included in the snippet below — paste it into <span className="mono">flussonic.conf</span> and reload.
                 </p>
               </div>
             </div>
@@ -526,23 +530,26 @@ export default function Settings() {
               </summary>
               <div className="mt-2 relative rounded-lg bg-[#0F172A] text-[#E2E8F0] p-3 font-mono text-[11px] leading-relaxed">
                 <button
-                  onClick={() => copyText("flu-conf", `# Server-wide limits\nmax_sessions ${limitsForm.max_sessions || 400};\nsource_timeout 60;\n\n# SRT publish (single port for push & play)\nsrt {\n  port 9998;\n}\n\n# Disk file caches\ncache ${limitsForm.cache_path || "/storage/flussonic/cache"} ${limitsForm.cache_size || "1500G"};\n`)}
+                  onClick={() => copyText("flu-conf", `# ─── Server-wide sessions ───\nsessions {\n  max_sessions ${limitsForm.max_sessions || 400};\n  client_timeout ${limitsForm.client_timeout || 60};\n}\nsource_timeout 60;\n\n# ─── SRT publish & play (single port) ───\nsrt {\n  port 9998;\n}\n\n# ─── Disk file caches ───\ncache ${limitsForm.cache_path || "/storage/flussonic/cache"} ${limitsForm.cache_size || "1500G"};\n`)}
                   className="absolute top-2 right-2 p-1.5 rounded-md bg-white/10 hover:bg-white/20 text-white"
                   title="Copy"
                   data-testid="copy-flussonic-conf"
                 >
                   <Copy className="w-3.5 h-3.5" />
                 </button>
-                <pre className="whitespace-pre pr-8">{`# Server-wide limits
-max_sessions ${limitsForm.max_sessions || 400};
+                <pre className="whitespace-pre pr-8">{`# ─── Server-wide sessions ───
+sessions {
+  max_sessions ${limitsForm.max_sessions || 400};
+  client_timeout ${limitsForm.client_timeout || 60};
+}
 source_timeout 60;
 
-# SRT publish (single port for push & play)
+# ─── SRT publish & play (single port) ───
 srt {
   port 9998;
 }
 
-# Disk file caches
+# ─── Disk file caches ───
 cache ${limitsForm.cache_path || "/storage/flussonic/cache"} ${limitsForm.cache_size || "1500G"};`}</pre>
                 {copied === "flu-conf" && (
                   <div className="absolute bottom-2 right-2 text-[10px] mono text-emerald-400">copied ✓</div>

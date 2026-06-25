@@ -756,6 +756,7 @@ class ServerLimitsIn(BaseModel):
     max_sessions: int | None = None
     cache_path: str | None = None
     cache_size: str | None = None
+    client_timeout: int | None = None
 
 
 @api.get("/server/limits")
@@ -772,6 +773,7 @@ async def server_limits_put(body: ServerLimitsIn, user=Depends(get_current_user)
             max_sessions=body.max_sessions,
             cache_path=body.cache_path,
             cache_size=body.cache_size,
+            client_timeout=body.client_timeout,
         )
     except httpx.HTTPStatusError as e:
         raise HTTPException(

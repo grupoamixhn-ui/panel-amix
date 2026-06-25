@@ -682,25 +682,36 @@ async def get_server_limits() -> dict[str, Any]:
     cfg = await _active_config()
     cache_path = ""
     cache_size = ""
+    client_timeout = 60
     if _DB is not None:
         doc = await _DB.config.find_one({"_id": "server_limits"}) or {}
         cache_path = doc.get("cache_path") or "/storage/flussonic/cache"
         cache_size = doc.get("cache_size") or "1500G"
+        client_timeout = int(doc.get("client_timeout") or 60)
     if not cfg["url"]:
         return {
-            "max_sessions": 0, "client_timeout": 60, "client_timeout_editable": False,
+            "max_sessions": 0, "client_timeout": client_timeout, "client_timeout_editable": False,
             "cache_path": cache_path, "cache_size": cache_size,
             "warning": "Flussonic not configured",
         }
+    flussonic_max_sessions = 0
     async with _make_client(cfg) as c:
         try:
             r = await c.get(f"{cfg['api_path']}/config")
             data = r.json() if r.status_code == 200 else {}
+            flussonic_max_sessions = int(data.get("max_sessions") or 0)
         except Exception:  # noqa: BLE001
             data = {}
+        # Auto-init: if Flussonic has no max_sessions configured, push the default 400
+        if flussonic_max_sessions == 0:
+            try:
+                await c.put(f"{cfg['api_path']}/config", json={"max_sessions": 400})
+                flussonic_max_sessions = 400
+            except Exception:  # noqa: BLE001
+                pass
     return {
-        "max_sessions": int(data.get("max_sessions") or 0),
-        "client_timeout": 60,
+        "max_sessions": flussonic_max_sessions,
+        "client_timeout": client_timeout,
         "client_timeout_editable": False,
         "cache_path": cache_path,
         "cache_size": cache_size,
@@ -711,22 +722,24 @@ async def set_server_limits(
     *, max_sessions: int | None = None,
     cache_path: str | None = None,
     cache_size: str | None = None,
+    client_timeout: int | None = None,
 ) -> dict[str, Any]:
-    """Push max_sessions to Flussonic, persist cache settings in our DB."""
+    """Push max_sessions to Flussonic, persist cache + client_timeout in our DB."""
     cfg = await _active_config()
     if not cfg["url"]:
         raise RuntimeError("Flussonic not configured")
 
-    # Persist cache settings locally — Flussonic API doesn't accept them.
-    if _DB is not None and (cache_path is not None or cache_size is not None):
+    # Persist locally — Flussonic API rejects cache/client_timeout keys.
+    if _DB is not None and (cache_path is not None or cache_size is not None or client_timeout is not None):
         update: dict[str, Any] = {"updated_at": datetime.now(timezone.utc).isoformat()}
         if cache_path is not None:
             update["cache_path"] = cache_path.strip()
         if cache_size is not None:
             update["cache_size"] = cache_size.strip()
+        if client_timeout is not None:
+            update["client_timeout"] = int(client_timeout)
         await _DB.config.update_one({"_id": "server_limits"}, {"$set": update}, upsert=True)
 
-    # Push to Flussonic only the keys the API actually accepts.
     body: dict[str, Any] = {}
     if max_sessions is not None:
         body["max_sessions"] = int(max_sessions)
