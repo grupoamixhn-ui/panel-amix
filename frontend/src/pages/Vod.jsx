@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import api from "../api";
 import PageHeader from "../components/PageHeader";
 import HlsPlayer from "../components/HlsPlayer";
-import { Film, Folder, FolderOpen, Play, ChevronRight, RefreshCw, Search, Copy, Check, X, ExternalLink, Info } from "lucide-react";
+import { Film, Folder, FolderOpen, Play, ChevronRight, RefreshCw, Search, Copy, Check, X, ExternalLink, Info, Tv, CheckSquare, Square } from "lucide-react";
 
 function fmtSize(bytes) {
   if (!bytes) return "—";
@@ -36,6 +36,8 @@ export default function Vod() {
   const [err, setErr] = useState("");
   const [manualPath, setManualPath] = useState("");
   const [filter, setFilter] = useState("");
+  const [selection, setSelection] = useState([]);           // multi-select files for 24/7 channel
+  const [channelModal, setChannelModal] = useState(false);
 
   const loadLocations = useCallback(async () => {
     setErr("");
@@ -59,6 +61,13 @@ export default function Vod() {
       .catch((e) => setErr(e.response?.data?.detail || e.message))
       .finally(() => setLoading(false));
   }, [active, path]);
+
+  // Reset selection when changing location/path
+  useEffect(() => { setSelection([]); }, [active, path]);
+
+  const toggleSelect = (filePath) => {
+    setSelection((prev) => prev.includes(filePath) ? prev.filter((p) => p !== filePath) : [...prev, filePath]);
+  };
 
   const loadPlayback = useCallback(async (filePath) => {
     if (!active?.name || !filePath) return;
@@ -192,12 +201,23 @@ export default function Vod() {
                 {visibleEntries.map((e) => {
                   const full = path ? `${path}/${e.name}` : e.name;
                   const isSel = selected === full;
+                  const isChecked = selection.includes(full);
                   return (
-                    <li key={full}>
+                    <li key={full} className={`flex items-center gap-2 hover:bg-[var(--surface-2)] transition-colors ${isSel ? "bg-[var(--primary-soft)]" : ""}`}>
+                      {e.type === "file" && (
+                        <button
+                          onClick={(ev) => { ev.stopPropagation(); toggleSelect(full); }}
+                          className="pl-3 py-2.5 text-[var(--muted)] hover:text-[var(--primary)]"
+                          title={isChecked ? "Remove from 24/7 selection" : "Add to 24/7 selection"}
+                          data-testid={`vod-check-${e.name}`}
+                        >
+                          {isChecked ? <CheckSquare className="w-4 h-4 text-[var(--primary)]" /> : <Square className="w-4 h-4" />}
+                        </button>
+                      )}
                       <button
                         onClick={() => (e.type === "dir" ? enterDir(e.name) : loadPlayback(full))}
                         data-testid={`vod-entry-${e.name}`}
-                        className={`w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-[var(--surface-2)] transition-colors ${isSel ? "bg-[var(--primary-soft)]" : ""}`}
+                        className="flex-1 flex items-center gap-3 px-3 py-2.5 text-left"
                       >
                         {e.type === "dir" ? <FolderOpen className="w-4 h-4 text-amber-500" /> : <Film className="w-4 h-4 text-[var(--primary)]" />}
                         <span className="text-xs flex-1 truncate font-medium">{e.name}</span>
@@ -208,6 +228,25 @@ export default function Vod() {
                   );
                 })}
               </ul>
+            )}
+
+            {/* 24/7 channel action bar (visible when files selected OR previewing a file) */}
+            {(selection.length > 0 || selected) && (
+              <div className="sticky bottom-4 z-10 flex items-center justify-between gap-3 px-4 py-3 rounded-lg border border-[var(--primary)] bg-[var(--primary-soft)] shadow-[var(--shadow-lg)]" data-testid="vod-channel-bar">
+                <div className="text-xs">
+                  {selection.length > 0
+                    ? <><strong>{selection.length}</strong> file{selection.length === 1 ? "" : "s"} selected for 24/7 channel</>
+                    : <>Create a 24/7 channel from <span className="mono">{selected}</span></>
+                  }
+                </div>
+                <button
+                  onClick={() => setChannelModal(true)}
+                  className="btn btn-primary"
+                  data-testid="vod-create-channel-btn"
+                >
+                  <Tv className="w-3.5 h-3.5" /> Create 24/7 channel
+                </button>
+              </div>
             )}
 
             {/* Preview + URLs */}
@@ -246,6 +285,15 @@ export default function Vod() {
             )}
           </main>
         </div>
+      )}
+
+      {channelModal && (
+        <CreateChannelModal
+          vodName={active?.name}
+          files={selection.length > 0 ? selection : (selected ? [selected] : [])}
+          onClose={() => setChannelModal(false)}
+          onCreated={() => { setChannelModal(false); setSelection([]); }}
+        />
       )}
     </div>
   );
@@ -291,6 +339,111 @@ function ManualEntry({ manualPath, setManualPath, onSubmit, vodName }) {
           <Play className="w-3.5 h-3.5" /> Preview
         </button>
       </form>
+    </div>
+  );
+}
+
+function CreateChannelModal({ vodName, files, onClose, onCreated }) {
+  const defaultName = useMemo(() => {
+    if (!files.length) return "channel-247";
+    const first = files[0].split("/").pop() || "channel";
+    return first.replace(/\.[^.]+$/, "").toLowerCase().replace(/[^a-z0-9_-]/g, "-").replace(/-+/g, "-").slice(0, 40) || "channel-247";
+  }, [files]);
+
+  const [streamName, setStreamName] = useState(defaultName);
+  const [title, setTitle] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState("");
+  const [done, setDone] = useState(null);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setErr(""); setSaving(true);
+    try {
+      const r = await api.post(`/vod/locations/${encodeURIComponent(vodName)}/create-channel`, {
+        files,
+        stream_name: streamName,
+        title: title || streamName,
+      });
+      setDone(r.data);
+    } catch (e2) {
+      setErr(e2.response?.data?.detail || e2.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-[#0F172A]/40 backdrop-blur-sm flex items-center justify-center p-4" data-testid="vod-channel-modal">
+      <div className="w-full max-w-lg bg-[var(--surface)] rounded-2xl shadow-[var(--shadow-lg)] border border-[var(--border)] relative">
+        <button onClick={onClose} className="absolute top-5 right-5 text-[var(--muted)] hover:text-[var(--text)]" data-testid="vod-channel-close">
+          <X className="w-4 h-4" />
+        </button>
+        <div className="px-7 pt-7 pb-4 border-b border-[var(--border)]">
+          <div className="flex items-center gap-2 mb-1">
+            <Tv className="w-4 h-4 text-[var(--primary)]" />
+            <div className="label">24/7 channel from VOD</div>
+          </div>
+          <h3 className="text-xl font-semibold tracking-tight">Linear loop channel</h3>
+          <p className="text-xs text-[var(--muted)] mt-1">
+            {files.length} file{files.length === 1 ? "" : "s"} → loops forever, served as a live HLS stream.
+          </p>
+        </div>
+
+        {done ? (
+          <div className="px-7 py-6 space-y-3" data-testid="vod-channel-success">
+            <div className="px-4 py-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm">
+              ✓ Channel <span className="mono font-semibold">{done.stream}</span> created. Flussonic is pulling the files and will start streaming in a few seconds.
+            </div>
+            <div className="text-[11px] text-[var(--muted)] mono break-all">
+              Inputs:<br />
+              {done.inputs.map((i) => <div key={i.url}>· {i.url}</div>)}
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <a href="/streams" className="btn btn-primary" data-testid="vod-channel-goto-streams">Go to Streams</a>
+              <button onClick={onClose} className="btn btn-secondary">Close</button>
+            </div>
+          </div>
+        ) : (
+          <form onSubmit={submit} className="px-7 py-5 space-y-4">
+            <div>
+              <label className="text-xs font-medium text-[var(--text-2)] block mb-1.5">Stream name <span className="text-[var(--muted)]">· lowercase, no spaces</span></label>
+              <input
+                data-testid="vod-channel-name"
+                value={streamName}
+                onChange={(e) => setStreamName(e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, "-"))}
+                required
+                className="w-full px-3 py-2 text-sm mono"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-[var(--text-2)] block mb-1.5">Title <span className="text-[var(--muted)]">· optional</span></label>
+              <input
+                data-testid="vod-channel-title"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder={streamName}
+                className="w-full px-3 py-2 text-sm"
+              />
+            </div>
+            <div className="rounded-lg bg-[var(--surface-2)] border border-[var(--border)] px-3 py-2.5 text-[11px] text-[var(--muted)] max-h-32 overflow-y-auto">
+              <div className="font-semibold text-[var(--text-2)] mb-1">Playlist ({files.length})</div>
+              {files.map((f) => <div key={f} className="mono truncate">· {f}</div>)}
+            </div>
+
+            {err && (
+              <div className="px-3 py-2 rounded-lg bg-[var(--error-soft)] border border-[#FECACA] text-[var(--error)] text-xs">{err}</div>
+            )}
+
+            <div className="flex justify-end gap-2 pt-1">
+              <button type="button" onClick={onClose} className="btn btn-secondary">Cancel</button>
+              <button type="submit" disabled={saving || !streamName} className="btn btn-primary" data-testid="vod-channel-submit">
+                {saving ? "Creating…" : <><Tv className="w-3.5 h-3.5" /> Create channel</>}
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
     </div>
   );
 }

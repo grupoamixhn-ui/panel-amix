@@ -507,6 +507,33 @@ async def vod_playback(vod_name: str, file: str, user=Depends(get_current_user))
     return await flussonic.vod_playback(vod_name, file)
 
 
+class VodChannelIn(BaseModel):
+    files: list[str]
+    stream_name: str
+    title: str = ""
+
+
+@api.post("/vod/locations/{vod_name}/create-channel")
+async def vod_create_channel(vod_name: str, body: VodChannelIn, user=Depends(get_current_user)):
+    if user.get("role") not in ("admin", "reseller"):
+        raise HTTPException(status_code=403, detail="Admin or reseller only")
+    if not body.files or not body.stream_name:
+        raise HTTPException(status_code=400, detail="files and stream_name are required")
+    try:
+        return await flussonic.vod_create_channel(
+            vod_name=vod_name,
+            files=body.files,
+            stream_name=body.stream_name,
+            title=body.title,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(status_code=502, detail=f"Flussonic rejected the request ({e.response.status_code})")
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 
 
 @api.get("/streams/{name}/sessions")

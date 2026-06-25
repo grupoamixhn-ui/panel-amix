@@ -913,3 +913,49 @@ async def vod_playback(vod_name: str, file_path: str) -> dict[str, Any]:
             {"label": "Direct file",       "protocol": "http", "url": base},
         ],
     }
+
+
+async def vod_create_channel(
+    *,
+    vod_name: str,
+    files: list[str],
+    stream_name: str,
+    title: str = "",
+) -> dict[str, Any]:
+    """Create a 24/7 looping live channel from one or more VOD files.
+
+    Flussonic accepts multiple `inputs` (failover list); for a sequential playlist
+    we set `loop: true` so the source restarts when each file ends. With a single
+    file this gives a perfect 24/7 loop; with multiple files Flussonic plays them
+    in order then loops back to the first.
+    """
+    if not vod_name or not files or not stream_name:
+        raise ValueError("vod_name, files and stream_name are required")
+
+    cfg = await _active_config()
+    locs = await list_vod_locations()
+    loc = next((l for l in locs if l.get("name") == vod_name), None)
+    storage = (loc or {}).get("storage") or f"/storage/{vod_name}"
+
+    # Build the inputs list. Use absolute file:// URLs against the VOD storage.
+    # Flussonic accepts `?loop=true` on file:// inputs to keep the source looping.
+    inputs = []
+    for f in files:
+        p = (f or "").lstrip("/")
+        if not p:
+            continue
+        inputs.append({"url": f"file://{storage.rstrip('/')}/{p}?loop=true"})
+
+    if not inputs:
+        raise ValueError("No valid files provided")
+
+    body: dict[str, Any] = {
+        "name": stream_name,
+        "title": title or stream_name,
+        "inputs": inputs,
+    }
+
+    async with _make_client(cfg) as c:
+        r = await c.put(f"{cfg['api_path']}/streams/{stream_name}", json=body)
+        r.raise_for_status()
+        return {"ok": True, "stream": stream_name, "inputs": inputs, "storage": storage}
