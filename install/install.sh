@@ -340,6 +340,13 @@ if [[ -f "$SOURCE_DIR/install/flussonic-admin-update.sh" ]]; then
   ok "update helper installed → $UPDATE_HELPER"
 fi
 
+# ---------- password reset CLI helper (root-only, no sudoers needed) ----------
+RESET_HELPER="/usr/local/bin/flussonic-admin-reset-password"
+if [[ -f "$SOURCE_DIR/install/flussonic-admin-reset-password.sh" ]]; then
+  install -m 0750 -o root -g root "$SOURCE_DIR/install/flussonic-admin-reset-password.sh" "$RESET_HELPER"
+  ok "password reset CLI installed → $RESET_HELPER (run with sudo)"
+fi
+
 SUDOERS_FILE="/etc/sudoers.d/flussonic-admin"
 cat > "$SUDOERS_FILE" <<EOF
 # Allow the backend service to manage its own TLS cert and reload nginx without password.
@@ -514,6 +521,9 @@ else
   printf "     Stored (bcrypt) in MongoDB; ADMIN_PASSWORD also lives in:\n"
   printf "        $APP_DIR/backend/.env  (root only)\n"
 fi
+
+printf "\n  ${C_BLD}Forgot it later?${C_RST}  Run on this VPS:\n"
+printf "     ${C_BLD}sudo flussonic-admin-reset-password${C_RST}\n"
 
 cat <<EOF
 
