@@ -91,13 +91,13 @@ export default function OutputsModal({ streamName, onClose }) {
                     {data.publish.map((o) => <Url key={o.label} item={o} />)}
                   </div>
 
-                  {/* OBS-friendly split (Server + Stream Key) */}
-                  {data.publish[0]?.server && (
-                    <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-2" data-testid="obs-split">
-                      <Url item={{ protocol: "rtmp", label: "OBS · Server", url: data.publish[0].server }} />
-                      <Url item={{ protocol: "rtmp", label: "OBS · Stream Key", url: data.publish[0].stream_key }} />
+                  {/* OBS-friendly split (Server + Stream Key) for RTMP and SRT */}
+                  {data.publish.filter((p) => p.server && p.stream_key).map((p) => (
+                    <div key={`split-${p.protocol}`} className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-2" data-testid={`${p.protocol}-split`}>
+                      <Url item={{ protocol: p.protocol, label: `${p.protocol.toUpperCase()} · Server`, url: p.server }} />
+                      <Url item={{ protocol: p.protocol, label: `${p.protocol.toUpperCase()} · Stream ${p.protocol === "srt" ? "ID" : "Key"}`, url: p.stream_key }} />
                     </div>
-                  )}
+                  ))}
 
                   {data.publish_password && (
                     <div className="mt-3 px-3 py-2 rounded-lg bg-[var(--primary-soft)] border border-blue-100 text-[11px] text-[var(--text-2)] leading-relaxed flex items-start gap-2" data-testid="publish-password-info">

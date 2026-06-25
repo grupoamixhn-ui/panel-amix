@@ -790,9 +790,11 @@ async def stream_outputs(name: str) -> dict[str, Any]:
             {
                 "label": "SRT publish",
                 "protocol": "srt",
-                # SRT does not support per-stream password via URL on Flussonic.
-                # Keep streamid clean: publish:STREAM_NAME
-                "url": f"srt://{host}:{srt_pub_p}?streamid=publish:{name}",
+                # Standard SRT URI streamid format for OBS / FFmpeg / hardware encoders.
+                # Many encoders accept the full URL; others (OBS) need Server + Stream ID split.
+                "url": f"srt://{host}:{srt_pub_p}?streamid=#!::r={name},m=publish",
+                "server": f"srt://{host}:{srt_pub_p}",
+                "stream_key": f"#!::r={name},m=publish",
             },
         ],
         "publish_password": publish_password,
