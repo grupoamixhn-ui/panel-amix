@@ -1,12 +1,37 @@
 import { useEffect, useRef, useState } from "react";
 import api from "../api";
 import { useBranding } from "../branding";
-import { Upload, Trash2, Image as ImageIcon } from "lucide-react";
+import { Upload, Trash2, Image as ImageIcon, Palette, RotateCcw } from "lucide-react";
+
+// Color suggestions auto-derived from common logo palettes
+const DEFAULT_PRIMARY = "#2563EB";
+const DEFAULT_HOVER = "#1D4ED8";
+const DEFAULT_SOFT = "#EFF6FF";
+
+// Simple HSL nudge so users only have to pick the primary; we auto-derive
+// a slightly darker hover + soft tint from it.
+function deriveFromPrimary(hex) {
+  if (!/^#[0-9a-fA-F]{6}$/.test(hex)) return { hover: hex, soft: hex };
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  const dark = (c) => Math.max(0, Math.round(c * 0.78));
+  const soft = (c) => Math.min(255, Math.round(c + (255 - c) * 0.92));
+  const toHex = (c) => c.toString(16).padStart(2, "0");
+  return {
+    hover: `#${toHex(dark(r))}${toHex(dark(g))}${toHex(dark(b))}`.toUpperCase(),
+    soft: `#${toHex(soft(r))}${toHex(soft(g))}${toHex(soft(b))}`.toUpperCase(),
+  };
+}
 
 export default function BrandingSection() {
   const branding = useBranding();
   const [brandName, setBrandName] = useState("");
   const [tagline, setTagline] = useState("");
+  const [primary, setPrimary] = useState(DEFAULT_PRIMARY);
+  const [primaryHover, setPrimaryHover] = useState(DEFAULT_HOVER);
+  const [primarySoft, setPrimarySoft] = useState(DEFAULT_SOFT);
+  const [autoDerive, setAutoDerive] = useState(true);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [savedFlash, setSavedFlash] = useState(false);
@@ -15,7 +40,18 @@ export default function BrandingSection() {
   useEffect(() => {
     setBrandName(branding.brand_name || "");
     setTagline(branding.tagline || "");
-  }, [branding.brand_name, branding.tagline]);
+    setPrimary(branding.primary_color || DEFAULT_PRIMARY);
+    setPrimaryHover(branding.primary_hover || DEFAULT_HOVER);
+    setPrimarySoft(branding.primary_soft || DEFAULT_SOFT);
+  }, [branding.brand_name, branding.tagline, branding.primary_color, branding.primary_hover, branding.primary_soft]);
+
+  // When auto-derive is on, recompute hover + soft from primary
+  useEffect(() => {
+    if (!autoDerive) return;
+    const { hover, soft } = deriveFromPrimary(primary);
+    setPrimaryHover(hover);
+    setPrimarySoft(soft);
+  }, [primary, autoDerive]);
 
   const upload = async (file) => {
     setErr(""); setBusy(true);
@@ -38,6 +74,41 @@ export default function BrandingSection() {
       fd.append("tagline", tagline);
       await api.post("/branding", fd, { headers: { "Content-Type": "multipart/form-data" } });
       await branding.reload();
+      setSavedFlash(true); setTimeout(() => setSavedFlash(false), 2000);
+    } catch (e) {
+      setErr(e.response?.data?.detail || e.message);
+    } finally { setBusy(false); }
+  };
+
+  const saveColors = async () => {
+    setErr(""); setBusy(true);
+    try {
+      const fd = new FormData();
+      fd.append("primary_color", primary);
+      fd.append("primary_hover", primaryHover);
+      fd.append("primary_soft", primarySoft);
+      await api.post("/branding", fd, { headers: { "Content-Type": "multipart/form-data" } });
+      await branding.reload();
+      setSavedFlash(true); setTimeout(() => setSavedFlash(false), 2000);
+    } catch (e) {
+      setErr(e.response?.data?.detail || e.message);
+    } finally { setBusy(false); }
+  };
+
+  const resetColors = async () => {
+    if (!window.confirm("Reset brand colors to the default blue?")) return;
+    setErr(""); setBusy(true);
+    try {
+      const fd = new FormData();
+      fd.append("primary_color", "");
+      fd.append("primary_hover", "");
+      fd.append("primary_soft", "");
+      await api.post("/branding", fd, { headers: { "Content-Type": "multipart/form-data" } });
+      await branding.reload();
+      setPrimary(DEFAULT_PRIMARY);
+      setPrimaryHover(DEFAULT_HOVER);
+      setPrimarySoft(DEFAULT_SOFT);
+      setAutoDerive(true);
       setSavedFlash(true); setTimeout(() => setSavedFlash(false), 2000);
     } catch (e) {
       setErr(e.response?.data?.detail || e.message);
@@ -165,6 +236,148 @@ export default function BrandingSection() {
             Brand name and tagline are only shown when no logo is uploaded. Once a logo is set, it replaces the text.
           </p>
         </div>
+      </div>
+
+      {/* Brand colors — advanced */}
+      <div className="mt-6 pt-6 border-t border-[var(--border)]" data-testid="branding-colors">
+        <div className="flex items-center justify-between gap-3 mb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: primarySoft }}>
+              <Palette className="w-4 h-4" style={{ color: primary }} />
+            </div>
+            <div>
+              <div className="font-semibold text-sm">Brand colors <span className="text-[var(--muted)] font-normal text-[11px] uppercase tracking-wider ml-1">advanced</span></div>
+              <div className="text-xs text-[var(--muted)]">Match the panel accent to the colors in your logo. Applied instantly.</div>
+            </div>
+          </div>
+          <label className="flex items-center gap-2 text-[11px] text-[var(--text-2)] cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={autoDerive}
+              onChange={(e) => setAutoDerive(e.target.checked)}
+              data-testid="branding-color-auto"
+            />
+            Auto-derive hover & soft
+          </label>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+          {/* Primary */}
+          <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-3">
+            <div className="label mb-2">Primary</div>
+            <div className="flex items-center gap-2">
+              <input
+                type="color"
+                value={primary}
+                onChange={(e) => setPrimary(e.target.value.toUpperCase())}
+                className="w-10 h-10 rounded-md border border-[var(--border)] cursor-pointer p-0"
+                data-testid="branding-primary-color"
+              />
+              <input
+                type="text"
+                value={primary}
+                onChange={(e) => setPrimary(e.target.value.toUpperCase())}
+                placeholder="#2563EB"
+                className="flex-1 px-2 py-1.5 text-xs mono uppercase"
+                maxLength={9}
+              />
+            </div>
+          </div>
+          {/* Hover */}
+          <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-3">
+            <div className="label mb-2 flex items-center justify-between">
+              <span>Hover</span>
+              {autoDerive && <span className="text-[9px] text-[var(--muted)] normal-case">auto</span>}
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="color"
+                value={primaryHover}
+                onChange={(e) => setPrimaryHover(e.target.value.toUpperCase())}
+                disabled={autoDerive}
+                className="w-10 h-10 rounded-md border border-[var(--border)] cursor-pointer p-0 disabled:opacity-50"
+                data-testid="branding-primary-hover"
+              />
+              <input
+                type="text"
+                value={primaryHover}
+                onChange={(e) => setPrimaryHover(e.target.value.toUpperCase())}
+                disabled={autoDerive}
+                placeholder="#1D4ED8"
+                className="flex-1 px-2 py-1.5 text-xs mono uppercase disabled:opacity-50"
+                maxLength={9}
+              />
+            </div>
+          </div>
+          {/* Soft */}
+          <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-3">
+            <div className="label mb-2 flex items-center justify-between">
+              <span>Soft tint</span>
+              {autoDerive && <span className="text-[9px] text-[var(--muted)] normal-case">auto</span>}
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="color"
+                value={primarySoft}
+                onChange={(e) => setPrimarySoft(e.target.value.toUpperCase())}
+                disabled={autoDerive}
+                className="w-10 h-10 rounded-md border border-[var(--border)] cursor-pointer p-0 disabled:opacity-50"
+                data-testid="branding-primary-soft"
+              />
+              <input
+                type="text"
+                value={primarySoft}
+                onChange={(e) => setPrimarySoft(e.target.value.toUpperCase())}
+                disabled={autoDerive}
+                placeholder="#EFF6FF"
+                className="flex-1 px-2 py-1.5 text-xs mono uppercase disabled:opacity-50"
+                maxLength={9}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Live preview swatch */}
+        <div className="rounded-xl p-4 mb-4" style={{ background: primarySoft, border: `1px solid ${primary}33` }} data-testid="branding-color-preview">
+          <div className="text-[10px] uppercase tracking-wider mb-2" style={{ color: primary, opacity: 0.7 }}>Preview</div>
+          <div className="flex items-center gap-3 flex-wrap">
+            <button
+              type="button"
+              className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white shadow-sm"
+              style={{ background: primary }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = primaryHover; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = primary; }}
+            >
+              Primary button
+            </button>
+            <span className="text-xs font-semibold" style={{ color: primary }}>Highlighted text</span>
+            <span className="text-[10px] mono px-2 py-1 rounded-md" style={{ background: primarySoft, color: primary, border: `1px solid ${primary}44` }}>● live</span>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={saveColors}
+            disabled={busy}
+            className="btn btn-primary"
+            data-testid="branding-save-colors-button"
+          >
+            {busy ? "Saving…" : "Save colors"}
+          </button>
+          <button
+            type="button"
+            onClick={resetColors}
+            disabled={busy}
+            className="btn btn-ghost"
+            data-testid="branding-reset-colors-button"
+          >
+            <RotateCcw className="w-3.5 h-3.5" /> Reset to default
+          </button>
+        </div>
+        <p className="text-[11px] text-[var(--muted)] mt-3 leading-relaxed">
+          Pro tip: pick your logo&apos;s dominant color as <strong>Primary</strong>. The other two adapt automatically — uncheck <em>Auto-derive</em> to set them manually.
+        </p>
       </div>
     </div>
   );

@@ -1,15 +1,34 @@
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import api from "./api";
 
-const BrandingContext = createContext({ logo_data_uri: "", brand_name: "", tagline: "", reload: () => {} });
+const EMPTY = {
+  logo_data_uri: "", brand_name: "", tagline: "",
+  primary_color: "", primary_hover: "", primary_soft: "",
+};
+
+const BrandingContext = createContext({ ...EMPTY, reload: () => {} });
+
+// Apply (or revert) the custom brand colors as CSS variables on :root so the
+// entire UI re-themes itself without rebuilding the stylesheet.
+function applyBrandColors({ primary_color, primary_hover, primary_soft }) {
+  const root = document.documentElement;
+  if (primary_color) root.style.setProperty("--primary", primary_color);
+  else root.style.removeProperty("--primary");
+  if (primary_hover) root.style.setProperty("--primary-hover", primary_hover);
+  else root.style.removeProperty("--primary-hover");
+  if (primary_soft) root.style.setProperty("--primary-soft", primary_soft);
+  else root.style.removeProperty("--primary-soft");
+}
 
 export function BrandingProvider({ children }) {
-  const [brand, setBrand] = useState({ logo_data_uri: "", brand_name: "", tagline: "" });
+  const [brand, setBrand] = useState(EMPTY);
 
   const reload = useCallback(async () => {
     try {
       const r = await api.get("/branding");
-      setBrand(r.data || { logo_data_uri: "", brand_name: "", tagline: "" });
+      const next = { ...EMPTY, ...(r.data || {}) };
+      setBrand(next);
+      applyBrandColors(next);
     } catch {
       /* ignore */
     }

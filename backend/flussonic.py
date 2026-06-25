@@ -637,47 +637,49 @@ async def get_monitor_metrics() -> dict[str, Any]:
     warning = ""
     bw_out = 0
     bw_in = 0
+    uptime_s = 0
+    config_stats: dict[str, Any] = {}
 
     async with _make_client(cfg) as c:
-        # Try /server first
+        # Primary source: /streamer/api/v3/config — this is the endpoint that
+        # most Flussonic 24.x deployments expose (including behind restrictive
+        # reverse proxies). It returns a `stats` dict with cpu_usage, memory_usage,
+        # input_kbit, output_kbit, total_clients, online_streams, uptime, etc.
         server_payload: dict[str, Any] = {}
         server_status: int | None = None
         try:
-            r = await c.get(f"{cfg['api_path']}/server")
+            r = await c.get(f"{cfg['api_path']}/config")
             server_status = r.status_code
             if r.status_code < 400 and r.headers.get("content-type", "").startswith("application/json"):
-                try:
-                    server_payload = r.json() or {}
-                except Exception:  # noqa: BLE001
-                    server_payload = {}
+                cfg_payload = r.json() or {}
+                config_stats = cfg_payload.get("stats") or {}
+                if config_stats:
+                    server_payload = config_stats
         except httpx.HTTPError as e:
-            warning = f"Server endpoint unreachable: {type(e).__name__}"
+            warning = f"Config endpoint unreachable: {type(e).__name__}"
 
-        # Fallback: /system (some Flussonic versions expose detailed sys stats here)
-        sys_payload: dict[str, Any] = {}
+        # Fallback chain — older API shapes / less restrictive proxies
         if not server_payload:
-            for alt in ("/system", "/sys", "/server/stats"):
+            for alt in ("/server", "/system", "/sys", "/server/stats"):
                 try:
                     r2 = await c.get(f"{cfg['api_path']}{alt}")
                     if r2.status_code < 400 and r2.headers.get("content-type", "").startswith("application/json"):
-                        sys_payload = r2.json() or {}
+                        server_payload = r2.json() or {}
                         break
                 except httpx.HTTPError:
                     continue
 
-        payload = server_payload or sys_payload
-        if payload:
-            # Flussonic publishes cpu/memory under various keys
+        if server_payload:
             cpu_val = (
-                payload.get("cpu_usage")
-                or payload.get("cpu")
-                or (payload.get("system") or {}).get("cpu")
+                server_payload.get("cpu_usage")
+                or server_payload.get("cpu")
+                or (server_payload.get("system") or {}).get("cpu")
                 or 0
             )
             mem_val = (
-                payload.get("memory_usage")
-                or payload.get("memory")
-                or (payload.get("system") or {}).get("memory")
+                server_payload.get("memory_usage")
+                or server_payload.get("memory")
+                or (server_payload.get("system") or {}).get("memory")
                 or 0
             )
             try:
@@ -691,15 +693,27 @@ async def get_monitor_metrics() -> dict[str, Any]:
                 cpu_ram_available = True
             except (TypeError, ValueError):
                 cpu_ram_available = False
+            # Bandwidth + uptime from the same payload
+            try:
+                in_kbit = float(server_payload.get("input_kbit") or 0)
+                out_kbit = float(server_payload.get("output_kbit") or 0)
+                bw_in = int(in_kbit * 1000)
+                bw_out = int(out_kbit * 1000)
+            except (TypeError, ValueError):
+                bw_in = bw_out = 0
+            try:
+                uptime_s = int(server_payload.get("uptime") or 0)
+            except (TypeError, ValueError):
+                uptime_s = 0
         elif server_status == 404:
             warning = (
-                "Flussonic /server endpoint is blocked by your reverse proxy (404). "
-                "Ask your operator to whitelist /streamer/api/v3/server to enable CPU/RAM metrics."
+                "Flussonic /config endpoint blocked by your reverse proxy (404). "
+                "Ask your operator to whitelist /streamer/api/v3/config to enable CPU/RAM metrics."
             )
         elif server_status in (401, 403):
-            warning = f"Auth failed on /server (HTTP {server_status})."
+            warning = f"Auth failed on /config (HTTP {server_status})."
 
-        # Streams → bandwidth + viewers
+        # Streams → bandwidth fallback + viewer roll-up
         try:
             sr = await c.get(f"{cfg['api_path']}/streams")
             streams_raw = sr.json() if sr.status_code == 200 else []
@@ -710,11 +724,17 @@ async def get_monitor_metrics() -> dict[str, Any]:
 
     normalized = [_normalize_stream(s.get("name") or "?", s) for s in streams_raw]
     live = sum(1 for s in normalized if s["alive"])
-    clients = sum(s["clients"] for s in normalized)
-    bw_out = sum(s["bitrate"] for s in normalized)
-    # input bandwidth ~ same magnitude as output for a single-source stream;
-    # without explicit /sessions roll-up we approximate from per-stream stats.
-    bw_in = bw_out
+    # Prefer total_clients from /config (covers sessions w/o per-stream client_count).
+    # Fall back to summing per-stream clients from /streams.
+    clients_from_cfg = server_payload.get("total_clients") if server_payload else None
+    if isinstance(clients_from_cfg, int):
+        clients = clients_from_cfg
+    else:
+        clients = sum(s["clients"] for s in normalized)
+    # If /config didn't give us bandwidth, derive from /streams
+    if not bw_out:
+        bw_out = sum(s["bitrate"] for s in normalized)
+        bw_in = bw_out
 
     return {
         "ts": datetime.now(timezone.utc).isoformat(),
@@ -725,6 +745,7 @@ async def get_monitor_metrics() -> dict[str, Any]:
         "clients": int(clients),
         "streams_live": int(live),
         "streams_total": len(normalized),
+        "uptime_s": int(uptime_s),
         "cpu_ram_available": cpu_ram_available,
         "source_warning": warning,
         "mode": "live",
@@ -740,16 +761,30 @@ async def list_logs(limit: int = 100) -> list[dict[str, Any]]:
 
 async def get_branding() -> dict[str, Any]:
     if _DB is None:
-        return {"logo_data_uri": "", "brand_name": "", "tagline": ""}
+        return {
+            "logo_data_uri": "", "brand_name": "", "tagline": "",
+            "primary_color": "", "primary_hover": "", "primary_soft": "",
+        }
     doc = await _DB.config.find_one({"_id": "branding"}) or {}
     return {
         "logo_data_uri": doc.get("logo_data_uri", ""),
         "brand_name": doc.get("brand_name", ""),
         "tagline": doc.get("tagline", ""),
+        "primary_color": doc.get("primary_color", ""),
+        "primary_hover": doc.get("primary_hover", ""),
+        "primary_soft": doc.get("primary_soft", ""),
     }
 
 
-async def save_branding(*, logo_data_uri: str | None = None, brand_name: str | None = None, tagline: str | None = None) -> dict[str, Any]:
+async def save_branding(
+    *,
+    logo_data_uri: str | None = None,
+    brand_name: str | None = None,
+    tagline: str | None = None,
+    primary_color: str | None = None,
+    primary_hover: str | None = None,
+    primary_soft: str | None = None,
+) -> dict[str, Any]:
     if _DB is None:
         raise RuntimeError("DB not initialized")
     update: dict[str, Any] = {"updated_at": datetime.now(timezone.utc).isoformat()}
@@ -759,6 +794,12 @@ async def save_branding(*, logo_data_uri: str | None = None, brand_name: str | N
         update["brand_name"] = brand_name
     if tagline is not None:
         update["tagline"] = tagline
+    if primary_color is not None:
+        update["primary_color"] = primary_color
+    if primary_hover is not None:
+        update["primary_hover"] = primary_hover
+    if primary_soft is not None:
+        update["primary_soft"] = primary_soft
     await _DB.config.update_one({"_id": "branding"}, {"$set": update}, upsert=True)
     return await get_branding()
 

@@ -519,6 +519,16 @@ async def branding_get():
 
 _LOGO_MAX_BYTES = 1_000_000  # 1MB
 _LOGO_MIME = {"image/png", "image/jpeg", "image/jpg", "image/svg+xml", "image/webp", "image/gif"}
+import re as _re
+_HEX_COLOR_RE = _re.compile(r"^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$")
+
+
+def _validate_color(value: str | None, field: str) -> str | None:
+    if value is None or value == "":
+        return value  # None = unchanged, "" = clear
+    if not _HEX_COLOR_RE.match(value):
+        raise HTTPException(status_code=400, detail=f"{field} must be a hex color like #2563EB")
+    return value
 
 
 @api.post("/branding")
@@ -526,6 +536,9 @@ async def branding_post(
     logo: UploadFile | None = File(default=None),
     brand_name: str | None = Form(default=None),
     tagline: str | None = Form(default=None),
+    primary_color: str | None = Form(default=None),
+    primary_hover: str | None = Form(default=None),
+    primary_soft: str | None = Form(default=None),
     user=Depends(get_current_user),
 ):
     data_uri: str | None = None
@@ -540,6 +553,9 @@ async def branding_post(
         logo_data_uri=data_uri,
         brand_name=brand_name,
         tagline=tagline,
+        primary_color=_validate_color(primary_color, "primary_color"),
+        primary_hover=_validate_color(primary_hover, "primary_hover"),
+        primary_soft=_validate_color(primary_soft, "primary_soft"),
     )
 
 
