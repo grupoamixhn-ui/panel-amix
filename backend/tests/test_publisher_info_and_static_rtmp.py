@@ -95,7 +95,7 @@ class TestActivePublishers:
         if t is None:
             pytest.skip("Telenerema not present")
         if not t.get("publisher_ip"):
-            pytest.skip(f"Telenerema not currently publishing (publisher_ip empty)")
+            pytest.skip("Telenerema not currently publishing (publisher_ip empty)")
         assert t["publisher_proto"] == "srt", (
             f"Telenerema expected proto=srt, got {t['publisher_proto']!r} ip={t['publisher_ip']!r}"
         )
@@ -105,7 +105,7 @@ class TestActivePublishers:
         if v is None:
             pytest.skip("Vfstv not present")
         if not v.get("publisher_ip"):
-            pytest.skip(f"Vfstv not currently publishing (publisher_ip empty)")
+            pytest.skip("Vfstv not currently publishing (publisher_ip empty)")
         assert v["publisher_proto"] == "rtmp", (
             f"Vfstv expected proto=rtmp, got {v['publisher_proto']!r} ip={v['publisher_ip']!r}"
         )
@@ -139,7 +139,7 @@ class TestRtmpPullStatic:
     def test_rtmp_pull_includes_static(self, telenerema_outputs):
         outputs = telenerema_outputs.get("outputs", [])
         rtmp_pull = next((o for o in outputs if o["label"] == "RTMP pull"), None)
-        assert rtmp_pull is not None, f"RTMP pull entry missing in outputs"
+        assert rtmp_pull is not None, "RTMP pull entry missing in outputs"
         url = rtmp_pull["url"]
         assert "/static/" in url, f"RTMP pull URL missing /static/: {url!r}"
         assert url.endswith("/static/Telenerema"), (

@@ -195,8 +195,6 @@ class TestMaxBitrateConversion:
         assert cfg_resp.status_code == 200
         cfg = cfg_resp.json()
         fluss_url = cfg.get("url", "")
-        fluss_user = cfg.get("user", "")
-        api_path = cfg.get("api_path") or "/streamer/api/v3"
         if not fluss_url:
             pytest.skip("Flussonic not configured — cannot verify raw stored value")
         # We don't have the password from /api/config; rely on backend's PUT having actually

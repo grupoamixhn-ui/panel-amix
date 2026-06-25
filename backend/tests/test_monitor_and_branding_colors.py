@@ -67,8 +67,8 @@ _HEX_RE = re.compile(r"^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$")
 class TestBrandingColors:
     @pytest.fixture(autouse=True, scope="class")
     def _restore_clean(self, admin_session):
-        # Pre-snapshot
-        before = admin_session.get(f"{BASE_URL}/api/branding", timeout=10).json()
+        # Pre-snapshot (just verify endpoint is reachable)
+        admin_session.get(f"{BASE_URL}/api/branding", timeout=10).json()
         yield
         # cleanup — clear the three fields
         files = {

@@ -174,7 +174,7 @@ export default function Monitor() {
           </div>
         )}
 
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
           <KpiCell
             icon={Cpu}
             label="CPU"
@@ -191,10 +191,17 @@ export default function Monitor() {
           />
           <KpiCell
             icon={Wifi}
+            label="Bandwidth in"
+            value={fmtBitrate(latest?.bandwidth_in_bps ?? 0)}
+            hint="from publishers"
+            testId="kpi-bw-in"
+          />
+          <KpiCell
+            icon={Wifi}
             label="Bandwidth out"
             value={fmtBitrate(latest?.bandwidth_out_bps ?? 0)}
-            hint={`in: ${fmtBitrate(latest?.bandwidth_in_bps ?? 0)}`}
-            testId="kpi-bw"
+            hint="to viewers"
+            testId="kpi-bw-out"
           />
           <KpiCell
             icon={Users}
@@ -248,54 +255,54 @@ export default function Monitor() {
           </div>
         </div>
 
-        <div className="cell p-5" data-testid="chart-bandwidth">
-          <div className="flex items-center justify-between mb-3">
-            <div className="label flex items-center gap-2"><Activity className="w-3.5 h-3.5" /> Bandwidth · in/out · live</div>
-            <div className="mono text-xs text-[var(--muted)]">{fmtBitrate(latest?.bandwidth_out_bps ?? 0)}</div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4" data-testid="bw-charts">
+          <div className="cell p-5" data-testid="chart-bandwidth-in">
+            <div className="flex items-center justify-between mb-3">
+              <div className="label flex items-center gap-2"><Activity className="w-3.5 h-3.5 text-blue-600" /> Bandwidth IN · live</div>
+              <div className="mono text-xs text-[var(--muted)]">{fmtBitrate(latest?.bandwidth_in_bps ?? 0)}</div>
+            </div>
+            <ResponsiveContainer width="100%" height={260}>
+              <AreaChart data={history} margin={{ top: 5, right: 6, left: 0, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="grad-bw-in-only" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#2563EB" stopOpacity={0.4} />
+                    <stop offset="100%" stopColor="#2563EB" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid stroke="#E5E7EB" vertical={false} />
+                <XAxis dataKey="ts" tick={TICK} tickFormatter={fmtTime} axisLine={{ stroke: "#E5E7EB" }} tickLine={false} minTickGap={40} />
+                <YAxis tick={TICK} axisLine={{ stroke: "#E5E7EB" }} tickLine={false} width={56}
+                  tickFormatter={(v) => (v >= 1e6 ? `${(v / 1e6).toFixed(0)}M` : v >= 1e3 ? `${(v / 1e3).toFixed(0)}k` : v)} />
+                <Tooltip content={<BwTooltip />} />
+                <Area type="monotone" dataKey="bandwidth_in" name="in" stroke="#2563EB" strokeWidth={2.2}
+                  fill="url(#grad-bw-in-only)" isAnimationActive={false} />
+              </AreaChart>
+            </ResponsiveContainer>
           </div>
-          <ResponsiveContainer width="100%" height={260}>
-            <AreaChart data={history} margin={{ top: 5, right: 6, left: 0, bottom: 0 }}>
-              <defs>
-                <linearGradient id="grad-bw-out" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#16A34A" stopOpacity={0.35} />
-                  <stop offset="100%" stopColor="#16A34A" stopOpacity={0} />
-                </linearGradient>
-                <linearGradient id="grad-bw-in" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#2563EB" stopOpacity={0.25} />
-                  <stop offset="100%" stopColor="#2563EB" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid stroke="#E5E7EB" vertical={false} />
-              <XAxis dataKey="ts" tick={TICK} tickFormatter={fmtTime} axisLine={{ stroke: "#E5E7EB" }} tickLine={false} minTickGap={40} />
-              <YAxis
-                tick={TICK}
-                axisLine={{ stroke: "#E5E7EB" }}
-                tickLine={false}
-                width={56}
-                tickFormatter={(v) => (v >= 1e6 ? `${(v / 1e6).toFixed(0)}M` : v >= 1e3 ? `${(v / 1e3).toFixed(0)}k` : v)}
-              />
-              <Tooltip content={<BwTooltip />} />
-              <Area
-                type="monotone"
-                dataKey="bandwidth_out"
-                name="out"
-                stroke="#16A34A"
-                strokeWidth={2.2}
-                fill="url(#grad-bw-out)"
-                isAnimationActive={false}
-              />
-              <Area
-                type="monotone"
-                dataKey="bandwidth_in"
-                name="in"
-                stroke="#2563EB"
-                strokeWidth={1.6}
-                strokeDasharray="3 3"
-                fill="url(#grad-bw-in)"
-                isAnimationActive={false}
-              />
-            </AreaChart>
-          </ResponsiveContainer>
+
+          <div className="cell p-5" data-testid="chart-bandwidth-out">
+            <div className="flex items-center justify-between mb-3">
+              <div className="label flex items-center gap-2"><Activity className="w-3.5 h-3.5 text-emerald-600" /> Bandwidth OUT · live</div>
+              <div className="mono text-xs text-[var(--muted)]">{fmtBitrate(latest?.bandwidth_out_bps ?? 0)}</div>
+            </div>
+            <ResponsiveContainer width="100%" height={260}>
+              <AreaChart data={history} margin={{ top: 5, right: 6, left: 0, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="grad-bw-out-only" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#16A34A" stopOpacity={0.4} />
+                    <stop offset="100%" stopColor="#16A34A" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid stroke="#E5E7EB" vertical={false} />
+                <XAxis dataKey="ts" tick={TICK} tickFormatter={fmtTime} axisLine={{ stroke: "#E5E7EB" }} tickLine={false} minTickGap={40} />
+                <YAxis tick={TICK} axisLine={{ stroke: "#E5E7EB" }} tickLine={false} width={56}
+                  tickFormatter={(v) => (v >= 1e6 ? `${(v / 1e6).toFixed(0)}M` : v >= 1e3 ? `${(v / 1e3).toFixed(0)}k` : v)} />
+                <Tooltip content={<BwTooltip />} />
+                <Area type="monotone" dataKey="bandwidth_out" name="out" stroke="#16A34A" strokeWidth={2.2}
+                  fill="url(#grad-bw-out-only)" isAnimationActive={false} />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
         </div>
 
         <div className="cell p-5" data-testid="chart-viewers">
