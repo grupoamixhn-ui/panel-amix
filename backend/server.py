@@ -14,6 +14,7 @@ from datetime import datetime, timezone, timedelta
 from typing import Any
 
 import bcrypt
+import httpx
 import jwt
 from bson import ObjectId
 from bson.errors import InvalidId
@@ -534,6 +535,30 @@ async def config_clear(user=Depends(get_current_user)):
 
 
 # ---------- Branding (logo, brand name) ----------
+class ServerLimitsIn(BaseModel):
+    max_sessions: int | None = None
+
+
+@api.get("/server/limits")
+async def server_limits_get(user=Depends(get_current_user)):
+    return await flussonic.get_server_limits()
+
+
+@api.put("/server/limits")
+async def server_limits_put(body: ServerLimitsIn, user=Depends(get_current_user)):
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    try:
+        return await flussonic.set_server_limits(max_sessions=body.max_sessions)
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Flussonic rejected the update ({e.response.status_code})",
+        )
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @api.get("/branding")
 async def branding_get():
     """Public — no auth so the login page can render the logo."""

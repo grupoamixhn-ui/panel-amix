@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import api from "../api";
 import PageHeader from "../components/PageHeader";
 import BrandingSection from "../components/BrandingSection";
-import { Zap, Cable, CheckCircle2, XCircle, Loader2, Trash2, Download, Copy, RefreshCw, Package } from "lucide-react";
+import { Zap, Cable, CheckCircle2, XCircle, Loader2, Trash2, Download, Copy, RefreshCw, Package, Users, AlertTriangle } from "lucide-react";
 
 export default function Settings() {
   const [info, setInfo] = useState(null);
@@ -16,6 +16,11 @@ export default function Settings() {
   const [release, setRelease] = useState(null);  // {filename, version, size_bytes, sha256, download_url, curl_oneliner}
   const [rebuilding, setRebuilding] = useState(false);
   const [copied, setCopied] = useState("");
+  const [limits, setLimits] = useState(null);
+  const [limitsForm, setLimitsForm] = useState({ max_sessions: 400 });
+  const [limitsSaving, setLimitsSaving] = useState(false);
+  const [limitsSaved, setLimitsSaved] = useState(false);
+  const [limitsError, setLimitsError] = useState("");
 
   const loadAll = async () => {
     const [i, c] = await Promise.all([
@@ -45,6 +50,30 @@ export default function Settings() {
       .then((r) => setRelease(r.data))
       .catch(() => setRelease({ unavailable: true }));
   }, []);
+
+  // Load server-wide limits (max_sessions etc.)
+  useEffect(() => {
+    api.get("/server/limits")
+      .then((r) => {
+        setLimits(r.data);
+        setLimitsForm({ max_sessions: r.data?.max_sessions ?? 400 });
+      })
+      .catch(() => setLimits(null));
+  }, []);
+
+  const saveLimits = async () => {
+    setLimitsError(""); setLimitsSaving(true);
+    try {
+      const r = await api.put("/server/limits", { max_sessions: Number(limitsForm.max_sessions) || 0 });
+      setLimits(r.data);
+      setLimitsForm({ max_sessions: r.data.max_sessions });
+      setLimitsSaved(true); setTimeout(() => setLimitsSaved(false), 2000);
+    } catch (e) {
+      setLimitsError(e?.response?.data?.detail || e.message || "Save failed");
+    } finally {
+      setLimitsSaving(false);
+    }
+  };
 
   const rebuildRelease = async () => {
     setRebuilding(true);
@@ -353,6 +382,112 @@ export default function Settings() {
             </div>
           </div>
         </div>
+
+        {/* Server-wide limits (Flussonic global config) */}
+        {limits && (
+          <div className="cell p-6" data-testid="settings-server-limits">
+            <div className="flex items-start gap-3 mb-4">
+              <div className="w-10 h-10 rounded-lg bg-[var(--primary-soft)] flex items-center justify-center shrink-0">
+                <Users className="w-5 h-5 text-[var(--primary)]" />
+              </div>
+              <div>
+                <div className="font-semibold text-sm">Server-wide limits</div>
+                <div className="text-xs text-[var(--muted)] leading-snug mt-0.5">
+                  Global Flussonic settings shared across all streams. Pushed via <span className="mono">PUT /streamer/api/v3/config</span>.
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Max sessions */}
+              <div>
+                <label className="text-xs font-medium text-[var(--text-2)] block mb-1.5">
+                  Max simultaneous sessions
+                </label>
+                <input
+                  data-testid="server-limits-max-sessions"
+                  type="number" min="0" step="10"
+                  value={limitsForm.max_sessions}
+                  onChange={(e) => setLimitsForm({ ...limitsForm, max_sessions: e.target.value })}
+                  placeholder="400"
+                  className="w-full px-3 py-2.5 text-sm mono"
+                />
+                <p className="text-[11px] text-[var(--muted)] mt-1.5 leading-snug">
+                  Maximum number of concurrent playback sessions across all streams. <strong>0 = unlimited</strong>.
+                </p>
+              </div>
+
+              {/* Client timeout (read-only) */}
+              <div>
+                <label className="text-xs font-medium text-[var(--text-2)] block mb-1.5 flex items-center gap-1.5">
+                  Client timeout
+                  <span className="text-[9px] uppercase tracking-wider bg-[var(--surface-2)] text-[var(--muted)] px-1.5 py-0.5 rounded">read-only</span>
+                </label>
+                <input
+                  type="number"
+                  value={limits.client_timeout || 60}
+                  disabled
+                  className="w-full px-3 py-2.5 text-sm mono opacity-60 cursor-not-allowed"
+                  data-testid="server-limits-client-timeout"
+                />
+                <p className="text-[11px] text-[var(--muted)] mt-1.5 leading-snug">
+                  Not API-editable on Flussonic 24.x. Edit it in <span className="mono">/etc/flussonic/flussonic.conf</span>.
+                </p>
+              </div>
+            </div>
+
+            {/* Client timeout config snippet */}
+            <details className="mt-3">
+              <summary className="text-[11px] text-[var(--primary)] cursor-pointer hover:underline select-none">
+                Show flussonic.conf snippet for client_timeout →
+              </summary>
+              <div className="mt-2 relative rounded-lg bg-[#0F172A] text-[#E2E8F0] p-3 font-mono text-[11px] leading-relaxed">
+                <button
+                  onClick={() => copyText("client-timeout-conf", "sessions {\n  client_timeout 60;\n  max_sessions 400;\n}")}
+                  className="absolute top-2 right-2 p-1.5 rounded-md bg-white/10 hover:bg-white/20 text-white"
+                  title="Copy"
+                  data-testid="copy-client-timeout-conf"
+                >
+                  <Copy className="w-3.5 h-3.5" />
+                </button>
+                <pre className="whitespace-pre pr-8">{`sessions {
+  client_timeout 60;
+  max_sessions 400;
+}`}</pre>
+                {copied === "client-timeout-conf" && (
+                  <div className="absolute bottom-2 right-2 text-[10px] mono text-emerald-400">copied ✓</div>
+                )}
+                <div className="text-[10px] text-slate-400 mt-2">
+                  After editing, run <span className="mono text-slate-200">systemctl reload flussonic</span>.
+                </div>
+              </div>
+            </details>
+
+            {limitsError && (
+              <div className="mt-3 px-3 py-2 rounded-lg bg-[var(--error-soft)] border border-[#FECACA] text-[var(--error)] text-xs flex items-start gap-2" data-testid="server-limits-error">
+                <AlertTriangle className="w-3.5 h-3.5 mt-0.5" />
+                <div>{limitsError}</div>
+              </div>
+            )}
+
+            <div className="flex items-center gap-2 mt-4">
+              <button
+                onClick={saveLimits}
+                disabled={limitsSaving || Number(limitsForm.max_sessions) === limits.max_sessions}
+                className="btn btn-primary"
+                data-testid="server-limits-save-btn"
+              >
+                {limitsSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+                {limitsSaving ? "Saving…" : "Save limits"}
+              </button>
+              {limitsSaved && (
+                <span className="text-xs text-[var(--live)] flex items-center gap-1" data-testid="server-limits-saved">
+                  <CheckCircle2 className="w-3.5 h-3.5" /> Pushed to Flussonic
+                </span>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Self-hosted installer download */}
         {release && !release.unavailable && (

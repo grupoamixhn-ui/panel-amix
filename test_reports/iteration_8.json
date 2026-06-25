@@ -1,0 +1,38 @@
+{
+  "summary": "Iteration 8 — Verified the new Server-wide limits feature end-to-end. Backend: 6/6 tests pass in /app/backend/tests/test_server_limits.py covering GET auth requirement, response shape (max_sessions, client_timeout=60, client_timeout_editable=false), PUT max_sessions=500 returns updated value AND persists on real Flussonic (GET reads back 500), empty PUT body returns current state unchanged, PUT restore to 400 works, and PUT by a reseller (non-admin) correctly returns 403. Frontend: Playwright run confirms the Settings page renders the 'Server-wide limits' card (data-testid='settings-server-limits') with editable max_sessions input prefilled with 400, read-only client_timeout input showing 60 with a 'read-only' badge, the collapsible 'Show flussonic.conf snippet for client_timeout →' details containing the exact conf snippet (sessions { client_timeout 60; max_sessions 400; }) and the copy button (data-testid='copy-client-timeout-conf'), Save-limits button DISABLED when value unchanged and ENABLED when changed, clicking Save with 500 produced the green 'Pushed to Flussonic' confirmation (data-testid='server-limits-saved') for ~2 seconds, then the button returned to disabled state with the input showing 500 — confirming the PUT round-tripped. The card was also used via the UI to restore max_sessions back to 400 at the end. CLEANUP CONFIRMED: final GET /api/server/limits → max_sessions=400.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Settings page", "issues": ["Console warning (pre-existing, not introduced this iteration): 'Encountered two children with the same key, /streamer/api/v3/streams/{name}'. Some unrelated list in Settings renders rows with duplicate React keys. Does not affect functionality but should be cleaned (likely the connection-status / streams hint section). NOT BLOCKING."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_server_limits.py",
+    "/app/test_reports/pytest/iter8_results.xml"
+  ],
+  "action_items": [
+    "(low) Investigate the React 'duplicate key' warning on the Settings page (/streamer/api/v3/streams/{name} repeated). Likely a list rendering somewhere on Settings without proper key. Non-blocking."
+  ],
+  "critical_code_review_comments": [
+    "server.py:538-559 — ServerLimitsIn(max_sessions: int | None = None) is correct; GET requires authenticated user (any role), PUT enforces admin-only with explicit 403; Flussonic HTTP errors are mapped to 502 (good). One small note: the empty-body PUT path passes max_sessions=None which short-circuits in flussonic.set_server_limits to return get_server_limits() without calling Flussonic — perfect.",
+    "flussonic.py:580-612 — get_server_limits hardcodes client_timeout=60 and client_timeout_editable=false (matches request: client_timeout is NOT exposed by Flussonic /config root level). PUT body only includes 'max_sessions' so the Flussonic 'extra_keys' rejection never triggers. Returns the freshly-GET'd state so callers always see authoritative values. Good.",
+    "Settings.jsx:48-76 — loadEffect for /server/limits + saveLimits handler is clean. Disabled-when-unchanged uses Number(limitsForm.max_sessions) === limits.max_sessions which correctly handles the string-vs-number coercion from the <input type=number>.",
+    "Settings.jsx:386-490 — JSX includes ALL spec'd data-testid attributes (settings-server-limits, server-limits-max-sessions, server-limits-client-timeout, copy-client-timeout-conf, server-limits-save-btn, server-limits-saved, server-limits-error). The conf snippet text inside <pre> matches exactly 'sessions { client_timeout 60; max_sessions 400; }' with the systemctl reload hint.",
+    "Cosmetic 'Demo' word from previous iteration is gone from Login (now 'Default · admin@flussonic.io / admin123') — main agent applied the iter7 follow-up."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_server_limits.py"
+  ],
+  "success_rate": {"backend": "100% (6/6)", "frontend": "100% (all 14 UI assertions including save round-trip + disabled-state toggle)"},
+  "test_credentials": "admin@flussonic.io / admin123 (admin); TEST_reseller@flussonic.io / Reseller#123 (created by test for 403 check)",
+  "seed_data_creation": "Test temporarily created a sub-user TEST_reseller@flussonic.io (role=reseller) via POST /api/sub-users to verify 403 enforcement on PUT /server/limits. The reseller account is left behind (not destructive). max_sessions on Flussonic was modified 400→500 and explicitly restored back to 400 both via backend tests and via the UI's Save button — final verified state is 400.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "iter8 test file: /app/backend/tests/test_server_limits.py — run standalone with REACT_APP_BACKEND_URL env var. Do NOT run with the full backend test suite (pre-existing cross-suite interference on shared live Flussonic state, documented in iter7). The Server-wide limits card lives in /app/frontend/src/pages/Settings.jsx lines 386-490 and integrates with backend /api/server/limits. Per-stream max_bitrate_kbps/source_timeout (iter7) and server-wide max_sessions (iter8) are now BOTH live. client_timeout remains conf-file-only on Flussonic 24.x and is correctly surfaced as read-only with copyable snippet.",
+  "rca of the issue": "N/A — feature works end-to-end; no bug found. Confirmed: (1) GET shape correct, (2) PUT 500 persists on live Flussonic via /streamer/api/v3/config root level, (3) 403 returned for non-admin, (4) cleanup restored 400."
+}

@@ -577,6 +577,41 @@ async def list_logs(limit: int = 100) -> list[dict[str, Any]]:
     return []
 
 
+async def get_server_limits() -> dict[str, Any]:
+    """Return server-wide limits that are editable via the Flussonic /config endpoint."""
+    cfg = await _active_config()
+    if not cfg["url"]:
+        return {"max_sessions": 0, "client_timeout": 60, "client_timeout_editable": False, "warning": "Flussonic not configured"}
+    async with _make_client(cfg) as c:
+        try:
+            r = await c.get(f"{cfg['api_path']}/config")
+            data = r.json() if r.status_code == 200 else {}
+        except Exception:  # noqa: BLE001
+            data = {}
+    return {
+        "max_sessions": int(data.get("max_sessions") or 0),
+        # client_timeout is not API-editable on Flussonic 24.x; show 60 (default) as read-only
+        "client_timeout": 60,
+        "client_timeout_editable": False,
+    }
+
+
+async def set_server_limits(*, max_sessions: int | None = None) -> dict[str, Any]:
+    """Push allowed server-wide limits to Flussonic via PUT /config (root level)."""
+    cfg = await _active_config()
+    if not cfg["url"]:
+        raise RuntimeError("Flussonic not configured")
+    body: dict[str, Any] = {}
+    if max_sessions is not None:
+        body["max_sessions"] = int(max_sessions)
+    if not body:
+        return await get_server_limits()
+    async with _make_client(cfg) as c:
+        r = await c.put(f"{cfg['api_path']}/config", json=body)
+        r.raise_for_status()
+    return await get_server_limits()
+
+
 async def get_branding() -> dict[str, Any]:
     if _DB is None:
         return {
