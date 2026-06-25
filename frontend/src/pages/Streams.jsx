@@ -20,6 +20,7 @@ export default function Streams() {
   const [editing, setEditing] = useState(null);
   const [outputsFor, setOutputsFor] = useState(null);
   const [clientsFor, setClientsFor] = useState(null);
+  const [monitorFor, setMonitorFor] = useState(null);
   const [resetting, setResetting] = useState({});  // {streamName: true}
 
   const load = useCallback(async () => {
@@ -162,6 +163,14 @@ export default function Streams() {
                     <td className="px-5 py-3.5 text-right">
                       <div className="inline-flex items-center gap-2">
                         <button
+                          onClick={() => setMonitorFor(s.name)}
+                          className="btn-icon"
+                          title="Live monitor (real-time graphs)"
+                          data-testid={`stream-monitor-${s.name}`}
+                        >
+                          <Activity className="w-3.5 h-3.5" />
+                        </button>
+                        <button
                           onClick={() => setClientsFor(s.name)}
                           className="btn-icon"
                           title="Connected clients"
@@ -238,6 +247,10 @@ export default function Streams() {
 
       {clientsFor && (
         <StreamClientsModal streamName={clientsFor} onClose={() => setClientsFor(null)} />
+      )}
+
+      {monitorFor && (
+        <StreamLiveMonitor streamName={monitorFor} onClose={() => setMonitorFor(null)} />
       )}
     </div>
   );
