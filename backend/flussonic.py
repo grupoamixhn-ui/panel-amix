@@ -312,16 +312,14 @@ async def create_stream(
 ) -> dict[str, Any]:
     cfg = await _active_config()
     async with _make_client(cfg) as c:
-        # For receive-type streams (`publish://`) Flussonic doesn't need an input
-        # — it accepts pushes on the global rtmp_publish/srt_publish ports by stream name.
+        # For receive-type streams use `publish://` as the input URL — Flussonic
+        # recognises this and lights up the "Allow to publish — Enabled" radio in
+        # its own admin UI. Empty inputs[] would leave it neither enabled nor
+        # disabled, which is what the user was seeing.
         body: dict[str, Any] = {"name": name, "title": title}
-        if url and url != "publish://":
-            body["inputs"] = [{"url": url}]
-        else:
-            body["inputs"] = []
+        body["inputs"] = [{"url": url or "publish://"}]
         if publish_password:
             body["password"] = publish_password
-        # Flussonic max_bitrate is in bits/sec, our API takes kbit/s
         if max_bitrate_kbps is not None:
             body["max_bitrate"] = int(max_bitrate_kbps) * 1000 if max_bitrate_kbps > 0 else 0
         if source_timeout is not None:
@@ -344,10 +342,7 @@ async def update_stream(name: str, payload: dict[str, Any]) -> dict[str, Any] | 
         merged.setdefault("name", name)
         # Apply incoming changes
         if "url" in payload and payload["url"]:
-            if payload["url"] == "publish://":
-                merged["inputs"] = []
-            else:
-                merged["inputs"] = [{"url": payload["url"]}]
+            merged["inputs"] = [{"url": payload["url"]}]
         if "title" in payload:
             merged["title"] = payload["title"]
         if "publish_password" in payload:
