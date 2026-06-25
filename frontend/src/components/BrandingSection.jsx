@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import api from "../api";
 import { useBranding } from "../branding";
-import { Upload, Trash2, Image as ImageIcon, Palette, RotateCcw } from "lucide-react";
+import { Upload, Trash2, Image as ImageIcon, Palette, RotateCcw, Wand2 } from "lucide-react";
 
 // Color suggestions auto-derived from common logo palettes
 const DEFAULT_PRIMARY = "#2563EB";
@@ -22,6 +22,66 @@ function deriveFromPrimary(hex) {
     hover: `#${toHex(dark(r))}${toHex(dark(g))}${toHex(dark(b))}`.toUpperCase(),
     soft: `#${toHex(soft(r))}${toHex(soft(g))}${toHex(soft(b))}`.toUpperCase(),
   };
+}
+
+// Extract the dominant brand color from a logo image (data URI or URL).
+// Filters out near-white, near-black and low-saturation (grayscale) pixels so
+// we end up with the actual brand accent rather than the background.
+async function extractDominantColorFromImage(src) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      try {
+        // Downscale for speed; 80x80 ≈ 6400 samples is plenty
+        const SIZE = 80;
+        const canvas = document.createElement("canvas");
+        canvas.width = SIZE;
+        canvas.height = SIZE;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, SIZE, SIZE);
+        const { data } = ctx.getImageData(0, 0, SIZE, SIZE);
+
+        // Quantize into 32-step buckets per channel → 32^3 = 32768 keys
+        const buckets = new Map();
+        for (let i = 0; i < data.length; i += 4) {
+          const r = data[i], g = data[i + 1], b = data[i + 2], a = data[i + 3];
+          if (a < 200) continue;                                  // skip transparent
+          const max = Math.max(r, g, b);
+          const min = Math.min(r, g, b);
+          if (max < 35 || min > 235) continue;                    // skip near-black / near-white
+          if (max - min < 35) continue;                           // skip near-gray
+          const key = `${r >> 3}-${g >> 3}-${b >> 3}`;           // 32-step bucket
+          const entry = buckets.get(key);
+          if (entry) {
+            entry.count++;
+            entry.r += r; entry.g += g; entry.b += b;
+          } else {
+            buckets.set(key, { count: 1, r, g, b });
+          }
+        }
+        if (buckets.size === 0) {
+          // All pixels filtered out → fallback to default
+          resolve(null);
+          return;
+        }
+        // Pick the most common bucket
+        let best = null;
+        for (const entry of buckets.values()) {
+          if (!best || entry.count > best.count) best = entry;
+        }
+        const r = Math.round(best.r / best.count);
+        const g = Math.round(best.g / best.count);
+        const b = Math.round(best.b / best.count);
+        const toHex = (c) => c.toString(16).padStart(2, "0");
+        resolve(`#${toHex(r)}${toHex(g)}${toHex(b)}`.toUpperCase());
+      } catch (e) {
+        reject(e);
+      }
+    };
+    img.onerror = () => reject(new Error("Failed to load logo image"));
+    img.src = src;
+  });
 }
 
 export default function BrandingSection() {
@@ -93,6 +153,27 @@ export default function BrandingSection() {
     } catch (e) {
       setErr(e.response?.data?.detail || e.message);
     } finally { setBusy(false); }
+  };
+
+  const pickColorsFromLogo = async () => {
+    if (!branding.logo_data_uri) {
+      setErr("Upload a logo first.");
+      return;
+    }
+    setErr(""); setBusy(true);
+    try {
+      const dominant = await extractDominantColorFromImage(branding.logo_data_uri);
+      if (!dominant) {
+        setErr("Could not detect a brand color in this logo (too light, dark or grayscale).");
+        return;
+      }
+      setPrimary(dominant);
+      setAutoDerive(true); // hover + soft will recompute via the useEffect
+    } catch (e) {
+      setErr(e?.message || "Failed to read the logo image.");
+    } finally {
+      setBusy(false);
+    }
   };
 
   const resetColors = async () => {
@@ -355,7 +436,17 @@ export default function BrandingSection() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            type="button"
+            onClick={pickColorsFromLogo}
+            disabled={busy || !branding.logo_data_uri}
+            className="btn btn-ghost border-[var(--primary)] text-[var(--primary)] hover:bg-[var(--primary-soft)]"
+            data-testid="branding-pick-from-logo-button"
+            title={branding.logo_data_uri ? "Auto-pick the dominant color from your uploaded logo" : "Upload a logo first"}
+          >
+            <Wand2 className="w-3.5 h-3.5" /> Use logo colors
+          </button>
           <button
             type="button"
             onClick={saveColors}
@@ -376,7 +467,7 @@ export default function BrandingSection() {
           </button>
         </div>
         <p className="text-[11px] text-[var(--muted)] mt-3 leading-relaxed">
-          Pro tip: pick your logo&apos;s dominant color as <strong>Primary</strong>. The other two adapt automatically — uncheck <em>Auto-derive</em> to set them manually.
+          <strong>Use logo colors</strong> scans your uploaded logo and picks its dominant color automatically. You can still tweak it afterwards — Hover &amp; Soft are derived from Primary.
         </p>
       </div>
     </div>

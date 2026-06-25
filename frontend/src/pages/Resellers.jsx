@@ -88,9 +88,12 @@ function SubUserForm({ initial, onClose, onSaved, allStreams, currentUser }) {
                 className="w-full px-3 py-2.5 text-sm"
               >
                 <option value="client">Client</option>
-                {currentUser?.role === "admin" || (currentUser?.role === "reseller") ? (
+                {(currentUser?.role === "admin" || currentUser?.role === "reseller") && (
                   <option value="reseller">Reseller</option>
-                ) : null}
+                )}
+                {currentUser?.role === "admin" && (
+                  <option value="admin">Admin</option>
+                )}
               </select>
             </div>
             <div className="col-span-8">
@@ -124,7 +127,8 @@ function SubUserForm({ initial, onClose, onSaved, allStreams, currentUser }) {
             </div>
           </div>
 
-          {/* Quotas */}
+          {/* Quotas — admins have no quotas */}
+          {role !== "admin" && (
           <div className="grid grid-cols-3 gap-3">
             <div>
               <label className="text-xs font-medium text-[var(--text-2)] block mb-1.5">Max sub-users</label>
@@ -156,8 +160,10 @@ function SubUserForm({ initial, onClose, onSaved, allStreams, currentUser }) {
               />
             </div>
           </div>
+          )}
 
-          {/* Allowed streams */}
+          {/* Allowed streams — admins have access to all streams */}
+          {role !== "admin" && (
           <div>
             <div className="flex items-center justify-between mb-2">
               <label className="text-xs font-medium text-[var(--text-2)]">
@@ -194,6 +200,7 @@ function SubUserForm({ initial, onClose, onSaved, allStreams, currentUser }) {
               )}
             </div>
           </div>
+          )}
 
           <div>
             <label className="text-xs font-medium text-[var(--text-2)] block mb-1.5">Notes</label>

@@ -94,6 +94,8 @@ async def get_current_user(request: Request) -> dict:
         user.pop("password_hash", None)
         if user.get("parent_id"):
             user["parent_id"] = str(user["parent_id"])
+        if user.get("created_by"):
+            user["created_by"] = str(user["created_by"])
         return user
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token expired")
@@ -271,7 +273,11 @@ def _validate_subset(child: list[str], parent_pool: list[str] | None) -> list[st
 @api.get("/sub-users")
 async def sub_users_list(user=Depends(require_admin_or_reseller)):
     if user["role"] == "admin":
-        cursor = db.users.find({"role": {"$in": ["reseller", "client"]}})
+        # Show all non-self admin/reseller/client accounts
+        cursor = db.users.find({
+            "role": {"$in": ["admin", "reseller", "client"]},
+            "_id": {"$ne": ObjectId(user["id"])},
+        })
     else:
         descendant_ids = await get_descendant_ids(user["id"])
         if not descendant_ids:
@@ -282,8 +288,11 @@ async def sub_users_list(user=Depends(require_admin_or_reseller)):
 
 @api.post("/sub-users")
 async def sub_users_create(body: SubUserIn, user=Depends(require_admin_or_reseller)):
-    if body.role not in ("reseller", "client"):
-        raise HTTPException(status_code=400, detail="role must be 'reseller' or 'client'")
+    # Only admins can create other admins; resellers can only create reseller/client
+    if user["role"] == "reseller" and body.role not in ("reseller", "client"):
+        raise HTTPException(status_code=403, detail="Resellers can only create resellers or clients")
+    if body.role not in ("admin", "reseller", "client"):
+        raise HTTPException(status_code=400, detail="role must be 'admin', 'reseller' or 'client'")
     email = body.email.lower()
     if await db.users.find_one({"email": email}):
         raise HTTPException(status_code=409, detail="Email already exists")
@@ -374,8 +383,15 @@ async def sub_users_delete(uid: str, user=Depends(require_admin_or_reseller)):
         raise HTTPException(status_code=404, detail="Not found")
     if not await in_my_scope(user, uid):
         raise HTTPException(status_code=403, detail="Forbidden")
+    if target_oid == ObjectId(user["id"]):
+        raise HTTPException(status_code=403, detail="Cannot delete yourself")
+    if target.get("role") == "admin" and user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Only admins can delete admin users")
+    # Safety: don't allow deleting the last admin
     if target.get("role") == "admin":
-        raise HTTPException(status_code=403, detail="Cannot delete admin")
+        remaining = await db.users.count_documents({"role": "admin", "_id": {"$ne": target_oid}})
+        if remaining == 0:
+            raise HTTPException(status_code=403, detail="Cannot delete the last admin user")
     # Cascade: delete the whole sub-tree
     descendants = await get_descendant_ids(uid)
     descendants.add(uid)
