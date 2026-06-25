@@ -54,6 +54,7 @@ User wants a web admin panel for the Flussonic Media Server API. Confirmed via c
 - ✅ CPU/RAM monitor now reads from `/streamer/api/v3/config` (was 404 on `/server`); brand color picker + "Use logo colors" auto-extract in Branding settings; admin role can now create other admin users via /sub-users (2026-06-24)
 - ✅ Demo mode REMOVED entirely (backend + frontend); RTMP publish URL now uses Flussonic `/static/` application path; per-stream `max_bitrate_kbps` and `source_timeout` fields added to Stream wizard with server-wide max_sessions/client_timeout disclaimer (2026-06-24)
 - ✅ Server-wide limits card in Settings (GET/PUT `/api/server/limits`): editable `max_sessions` (pushed to Flussonic via PUT /config root level, admin-only) + read-only `client_timeout=60` with copyable `/etc/flussonic/flussonic.conf` snippet. Default set to 400 per user request (2026-06-24)
+- ✅ `max_bitrate_kbps` unit fix — Flussonic stores in bits/sec, UI shows kbit/s (was incorrectly /8 conversion); RTSP and DASH removed from Outputs modal; RTMP pull URL now includes /static/ matching publish; new `publisher_ip` + `publisher_proto` fields exposed in /api/streams (from stats.published_from / published_via). Streams table "Source" column shows colored SRT (purple) / RTMP (orange) badge + publisher IP for active push streams (2026-06-24)
 
 ## Prioritized Backlog
 **P1 (post-MVP polish)**
