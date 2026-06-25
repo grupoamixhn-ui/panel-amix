@@ -1,0 +1,47 @@
+# Files Docker should NEVER copy into the build context
+.git/
+.github/
+.emergent/
+.idea/
+.vscode/
+
+# Python
+**/__pycache__/
+**/*.pyc
+backend/.venv/
+**/.pytest_cache/
+**/.ruff_cache/
+**/.mypy_cache/
+
+# Node / React
+**/node_modules/
+frontend/build/
+frontend/.cache/
+
+# Local env files (image builds from .env.example via env vars at runtime)
+**/.env
+**/.env.local
+
+# Build artifacts & previous releases
+dist/
+build/
+*.tar.gz
+*.zip
+
+# Tests / memory / scratch
+test_reports/
+test_result.md
+memory/test_credentials.md
+
+# Docker meta files (don't recursively copy themselves)
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Logs
+*.log
+logs/
+
+# OS junk
+.DS_Store
+Thumbs.db

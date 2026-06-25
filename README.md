@@ -47,6 +47,33 @@ troubleshooting.
 
 ---
 
+## 🐳 Docker / Docker Compose
+
+Prefer containers? The whole stack (panel + MongoDB) lives in
+`docker-compose.yml`:
+
+```bash
+# 1. Generate secrets and put them in .env at the repo root
+cat > .env <<EOF
+JWT_SECRET=$(openssl rand -hex 32)
+ADMIN_EMAIL=admin@flussonic.io
+ADMIN_PASSWORD=$(openssl rand -base64 14 | tr -d '+/=' | cut -c1-16)
+PANEL_PORT=80
+EOF
+
+# 2. Build and run
+docker compose up -d --build
+
+# 3. Tail logs
+docker compose logs -f panel
+```
+
+The panel will be at `http://YOUR_HOST:80`, persistent data lives in the named
+volume `mongo-data`. To stop and remove everything: `docker compose down`
+(add `-v` to also wipe the database).
+
+---
+
 ## 🧱 Architecture
 
 ```
