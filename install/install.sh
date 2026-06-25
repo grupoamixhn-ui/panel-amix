@@ -4,10 +4,13 @@
 #  Supports: Ubuntu 22.04 / 24.04, Debian 11 / 12, AlmaLinux 8 / 9 / 10,
 #            RockyLinux 8 / 9 / 10
 #
+#  Default: panel runs on https://<ip>:8080 with a self-signed certificate.
+#
 #  Usage:
-#    sudo bash install.sh                              # local HTTP on port 80
-#    sudo bash install.sh --domain panel.example.com   # + Let's Encrypt SSL
-#    sudo bash install.sh --port 8080                  # listen on a non-standard port
+#    sudo bash install.sh                              # https://<ip>:8080 (self-signed)
+#    sudo bash install.sh --domain panel.example.com   # https + Let's Encrypt (port 443)
+#    sudo bash install.sh --port 9443                  # custom https port (self-signed)
+#    sudo bash install.sh --no-ssl                     # plain http on $port (default 8080)
 #    sudo bash install.sh --no-mongo                   # skip MongoDB install (already running)
 #    sudo bash install.sh --source-dir /path/to/code   # use code from this dir instead of script dir
 #    sudo bash install.sh --admin-email me@me.com      # custom admin email
@@ -33,7 +36,8 @@ APP_DIR="/opt/flussonic-admin"
 APP_USER="flussonic-admin"
 SERVICE_NAME="flussonic-admin"
 DOMAIN=""
-LISTEN_PORT="80"
+LISTEN_PORT="8080"
+USE_SSL="1"            # 1 = self-signed cert; 0 = plain HTTP; "letsencrypt" = via certbot
 ADMIN_EMAIL="admin@localhost"
 ADMIN_PASSWORD_OVERRIDE=""
 INSTALL_MONGO="1"
@@ -44,6 +48,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --domain)           DOMAIN="$2"; shift 2 ;;
     --port)             LISTEN_PORT="$2"; shift 2 ;;
+    --no-ssl)           USE_SSL="0"; shift ;;
     --admin-email)      ADMIN_EMAIL="$2"; shift 2 ;;
     --admin-password)   ADMIN_PASSWORD_OVERRIDE="$2"; shift 2 ;;
     --no-mongo)         INSTALL_MONGO="0"; shift ;;
@@ -52,6 +57,11 @@ while [[ $# -gt 0 ]]; do
     *)                  die "Unknown option: $1" ;;
   esac
 done
+
+# --domain switches HTTPS to Let's Encrypt (handled after nginx setup)
+if [[ -n "$DOMAIN" ]]; then
+  USE_SSL="letsencrypt"
+fi
 
 [[ $EUID -eq 0 ]] || die "Run as root (sudo bash $0)"
 
@@ -272,16 +282,45 @@ if ! systemctl is-active --quiet ${SERVICE_NAME}; then
 fi
 ok "backend service running on 127.0.0.1:8001"
 
+# ---------- self-signed certificate (when no domain provided) -----------------
+SSL_CERT_DIR="/etc/flussonic-admin/ssl"
+SSL_CERT="$SSL_CERT_DIR/cert.pem"
+SSL_KEY="$SSL_CERT_DIR/key.pem"
+
+if [[ "$USE_SSL" == "1" ]]; then
+  mkdir -p "$SSL_CERT_DIR"
+  if [[ ! -f "$SSL_CERT" || ! -f "$SSL_KEY" ]]; then
+    log "Generating self-signed TLS certificate (10 years validity)"
+    openssl req -x509 -nodes -newkey rsa:2048 \
+      -keyout "$SSL_KEY" -out "$SSL_CERT" \
+      -days 3650 -subj "/CN=$(hostname -f 2>/dev/null || hostname)" \
+      -addext "subjectAltName=DNS:$(hostname),IP:127.0.0.1" 2>/dev/null
+    chmod 600 "$SSL_KEY"
+    ok "self-signed cert in $SSL_CERT_DIR"
+  else
+    ok "reusing existing self-signed cert in $SSL_CERT_DIR"
+  fi
+fi
+
 # ---------- nginx site --------------------------------------------------------
 NGINX_SITE_NAME="flussonic-admin"
 SERVER_NAME_LINE="server_name _;"
 [[ -n "$DOMAIN" ]] && SERVER_NAME_LINE="server_name $DOMAIN;"
 
-cat > /tmp/${NGINX_SITE_NAME}.conf <<EOF
+if [[ "$USE_SSL" == "1" ]]; then
+  # HTTPS with self-signed cert
+  cat > /tmp/${NGINX_SITE_NAME}.conf <<EOF
 server {
-    listen $LISTEN_PORT;
-    listen [::]:$LISTEN_PORT;
+    listen $LISTEN_PORT ssl;
+    listen [::]:$LISTEN_PORT ssl;
+    http2 on;
     $SERVER_NAME_LINE
+
+    ssl_certificate     $SSL_CERT;
+    ssl_certificate_key $SSL_KEY;
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    ssl_ciphers         HIGH:!aNULL:!MD5;
+    ssl_prefer_server_ciphers on;
 
     client_max_body_size 64m;
     root $APP_DIR/frontend/build;
@@ -294,7 +333,7 @@ server {
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_set_header X-Forwarded-Proto https;
         proxy_read_timeout 120s;
         proxy_send_timeout 120s;
     }
@@ -311,6 +350,40 @@ server {
     }
 }
 EOF
+else
+  # Plain HTTP (--no-ssl or --domain triggers Let's Encrypt path below which rewrites this)
+  cat > /tmp/${NGINX_SITE_NAME}.conf <<EOF
+server {
+    listen $LISTEN_PORT;
+    listen [::]:$LISTEN_PORT;
+    $SERVER_NAME_LINE
+
+    client_max_body_size 64m;
+    root $APP_DIR/frontend/build;
+    index index.html;
+
+    location /api/ {
+        proxy_pass http://127.0.0.1:8001;
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_read_timeout 120s;
+        proxy_send_timeout 120s;
+    }
+
+    location / {
+        try_files \$uri \$uri/ /index.html;
+    }
+
+    location ~* \.(?:js|css|woff2?|ttf|svg|png|jpg|jpeg|gif|ico)\$ {
+        expires 30d;
+        add_header Cache-Control "public, max-age=2592000, immutable";
+    }
+}
+EOF
+fi
 
 if [[ "$PKG_FAMILY" == "deb" ]]; then
   mv /tmp/${NGINX_SITE_NAME}.conf /etc/nginx/sites-available/${NGINX_SITE_NAME}.conf
@@ -363,6 +436,8 @@ fi
 PUBLIC_IP="$(curl -fsS --max-time 3 ifconfig.me 2>/dev/null || hostname -I | awk '{print $1}')"
 if [[ -n "$DOMAIN" ]]; then
   PANEL_URL="https://$DOMAIN"
+elif [[ "$USE_SSL" == "1" ]]; then
+  if [[ "$LISTEN_PORT" == "443" ]]; then PANEL_URL="https://$PUBLIC_IP"; else PANEL_URL="https://$PUBLIC_IP:$LISTEN_PORT"; fi
 else
   if [[ "$LISTEN_PORT" == "80" ]]; then PANEL_URL="http://$PUBLIC_IP"; else PANEL_URL="http://$PUBLIC_IP:$LISTEN_PORT"; fi
 fi
