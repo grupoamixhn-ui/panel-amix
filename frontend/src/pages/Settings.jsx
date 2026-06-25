@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import api from "../api";
 import PageHeader from "../components/PageHeader";
 import BrandingSection from "../components/BrandingSection";
+import SslSection from "../components/SslSection";
 import { Zap, Cable, CheckCircle2, XCircle, Loader2, Trash2, Download, Copy, RefreshCw, Package, Users, AlertTriangle } from "lucide-react";
 
 export default function Settings() {
@@ -191,6 +192,8 @@ export default function Settings() {
 
       <div className="p-4 md:p-8 space-y-6 max-w-3xl">
         <BrandingSection />
+
+        <SslSection />
 
         {/* Connection form */}
         <div className="cell p-6" data-testid="settings-connection">

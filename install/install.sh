@@ -237,6 +237,8 @@ JWT_TTL_HOURS=72
 ADMIN_EMAIL=$ADMIN_EMAIL
 ADMIN_PASSWORD=$ADMIN_PASSWORD
 CORS_ORIGINS=*
+SSL_CERT_PATH=$SSL_CERT
+SSL_KEY_PATH=$SSL_KEY
 EOF
   ENV_REUSED=0
 fi
@@ -300,7 +302,37 @@ if [[ "$USE_SSL" == "1" ]]; then
   else
     ok "reusing existing self-signed cert in $SSL_CERT_DIR"
   fi
+  # Make the cert dir readable by the backend user so /api/ssl/upload can rewrite it.
+  chown -R root:"$APP_USER" "$SSL_CERT_DIR" 2>/dev/null || true
+  chmod 750 "$SSL_CERT_DIR"
+  chmod 640 "$SSL_CERT" "$SSL_KEY" 2>/dev/null || true
 fi
+
+# ---------- sudoers helper for SSL & nginx reload ----------------------------
+SSL_HELPER="/usr/local/bin/flussonic-admin-reload-ssl"
+cat > "$SSL_HELPER" <<EOF
+#!/usr/bin/env bash
+# Helper that the panel calls (with sudo) to install a new cert + reload nginx.
+# Args: \$1 = source cert path, \$2 = source key path
+set -e
+CERT_SRC="\$1"; KEY_SRC="\$2"
+[[ -f "\$CERT_SRC" && -f "\$KEY_SRC" ]] || exit 2
+install -m 0644 "\$CERT_SRC" "$SSL_CERT"
+install -m 0600 "\$KEY_SRC"  "$SSL_KEY"
+nginx -t && nginx -s reload
+EOF
+chmod 755 "$SSL_HELPER"
+
+SUDOERS_FILE="/etc/sudoers.d/flussonic-admin"
+cat > "$SUDOERS_FILE" <<EOF
+# Allow the backend service to manage its own TLS cert and reload nginx without password.
+$APP_USER ALL=(root) NOPASSWD: $SSL_HELPER
+$APP_USER ALL=(root) NOPASSWD: /usr/sbin/nginx -s reload
+$APP_USER ALL=(root) NOPASSWD: /usr/sbin/nginx -t
+$APP_USER ALL=(root) NOPASSWD: /usr/bin/certbot
+EOF
+chmod 440 "$SUDOERS_FILE"
+visudo -c -f "$SUDOERS_FILE" >/dev/null && ok "sudoers helper installed (SSL self-service)"
 
 # ---------- nginx site --------------------------------------------------------
 NGINX_SITE_NAME="flussonic-admin"
