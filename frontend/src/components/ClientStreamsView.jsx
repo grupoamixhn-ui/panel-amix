@@ -334,7 +334,7 @@ export default function ClientStreamsView() {
       {pushFor && (<PushTargetsModal streamName={pushFor} onClose={() => setPushFor(null)} />)}
       {(wizardOpen || editing) && (
         <StreamWizard
-          stream={editing}
+          initial={editing}
           onClose={() => { setWizardOpen(false); setEditing(null); }}
           onSaved={() => { setWizardOpen(false); setEditing(null); load(); }}
         />
