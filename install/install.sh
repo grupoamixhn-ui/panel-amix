@@ -313,7 +313,6 @@ if [[ "$USE_SSL" == "1" ]]; then
 server {
     listen $LISTEN_PORT ssl;
     listen [::]:$LISTEN_PORT ssl;
-    http2 on;
     $SERVER_NAME_LINE
 
     ssl_certificate     $SSL_CERT;
