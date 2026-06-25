@@ -6,6 +6,7 @@ import OutputsModal from "../components/OutputsModal";
 import StreamClientsModal from "../components/StreamClientsModal";
 import StreamLiveMonitor from "../components/StreamLiveMonitor";
 import PushTargetsModal from "../components/PushTargetsModal";
+import { useAuth } from "../auth";
 import { Plus, Play, Pause, Trash2, Share2, Search, Pencil, Users, RotateCw, Activity, Send } from "lucide-react";
 
 function statusPill(s) {

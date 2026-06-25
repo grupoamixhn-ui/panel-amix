@@ -57,9 +57,14 @@ User wants a web admin panel for the Flussonic Media Server API. Confirmed via c
 - ✅ `max_bitrate_kbps` unit fix — Flussonic stores in bits/sec, UI shows kbit/s (was incorrectly /8 conversion); RTSP and DASH removed from Outputs modal; RTMP pull URL now includes /static/ matching publish; new `publisher_ip` + `publisher_proto` fields exposed in /api/streams (from stats.published_from / published_via). Streams table "Source" column shows colored SRT (purple) / RTMP (orange) badge + publisher IP for active push streams (2026-06-24)
 - ✅ Per-stream Live Monitor modal (`StreamLiveMonitor.jsx`) wired to `GET /api/streams/{name}/live-stats` — Recharts time-series for input/output bitrate + bandwidth, plus video/audio codec/resolution/fps panel (2026-06-25)
 - ✅ SRT publish URL no longer appends `:PASSWORD` — SRT on Flussonic does not support per-stream password via streamid. RTMP keeps the `?password=` suffix. Updated Outputs modal copy + StreamWizard label to clarify "Publish password · RTMP only" (2026-06-25)
+- ✅ Social media push targets (`PushTargetsModal.jsx`) — `GET/POST /api/streams/{name}/pushes` for FB/YouTube/TikTok/Instagram/Custom RTMP destinations (2026-06-25)
+- ✅ SSL Section in Settings — Let's Encrypt automation + manual upload + sudoers helper for Nginx (2026-06-25)
+- ✅ Auto-detection of SRT/RTMP ports via `/api/config/flussonic/detect-ports` (2026-06-25)
+- ✅ RBAC UI restrictions on Streams page for `client` role — hides "New stream", Edit, Delete buttons. Imported `useAuth` from `../auth`. Verified with screenshot using `client.test@flussonic.io` (2026-06-25)
 
 ## Prioritized Backlog
 **P1 (post-MVP polish)**
+- CDN Multi-server architecture (Origin + Edges) — replicate streams across multiple Flussonic servers, view edge bandwidth
 - Add `data-testid="new-stream-modal"` to the streams modal (testing-agent suggestion)
 - Add `chart-*` testids on the /stats page
 - Catch `bson.errors.InvalidId` in `get_current_user` to return 401 on malformed JWT subs
@@ -67,14 +72,12 @@ User wants a web admin panel for the Flussonic Media Server API. Confirmed via c
 - Set cookie `secure=True` when behind HTTPS (env-driven)
 
 **P2 (features)**
+- Backend refactor: split `server.py` (>900 lines) and `flussonic.py` (>900 lines) into `/app/backend/routes/`, `/app/backend/services/`, `/app/backend/models/`
 - Stream detail page with embedded HLS preview (hls.js)
 - DVR archive timeline browser
-- Multi-server (cluster) selector
-- Multi-user roles (admin / viewer / operator)
 - Audit log persisted in MongoDB
-- Real Flussonic stats endpoints integration (per-version)
 - Webhooks / SSE push for sessions instead of polling
 
 ## Next Tasks
-- Wait for the user to test the demo and supply real Flussonic credentials, then flip DEMO_MODE=false.
-- Apply P1 polish items if requested.
+- CDN Multi-server (Origin + Edges) — P1
+- Backend modular refactor — P2
