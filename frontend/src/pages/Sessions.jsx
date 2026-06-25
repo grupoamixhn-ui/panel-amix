@@ -59,7 +59,7 @@ export default function Sessions() {
         }
       />
 
-      <div className="p-8 space-y-4">
+      <div className="p-4 md:p-8 space-y-4">
         <div className="flex items-center gap-2 flex-wrap">
           {filterBtn("", "All protocols", "proto-filter-all")}
           {protos.map((p) => filterBtn(p, p.toUpperCase(), `proto-filter-${p}`))}

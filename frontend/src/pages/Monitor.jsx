@@ -150,7 +150,7 @@ export default function Monitor() {
         }
       />
 
-      <div className="p-8 space-y-6">
+      <div className="p-4 md:p-8 space-y-6">
         {error && (
           <div className="cell p-4 flex items-start gap-3 border-[var(--error)]" data-testid="monitor-error">
             <AlertTriangle className="w-4 h-4 text-[var(--error)] mt-0.5" />

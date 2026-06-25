@@ -282,7 +282,7 @@ export default function Resellers() {
         }
       />
 
-      <div className="p-8 space-y-4">
+      <div className="p-4 md:p-8 space-y-4">
         <div className="flex items-center gap-3">
           <div className="relative flex-1 max-w-md">
             <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--muted)]" />

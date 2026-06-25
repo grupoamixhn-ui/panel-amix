@@ -64,7 +64,7 @@ export default function Stats() {
     <div data-testid="stats-page">
       <PageHeader title="Statistics" subtitle="Historical & distribution" testId="stats-header" />
 
-      <div className="p-8 space-y-6">
+      <div className="p-4 md:p-8 space-y-6">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <KpiCell icon={Radio} label="Streams" value={info?.streams_total ?? 0} suffix={`${liveStreams} live`} testId="stat-streams" />
           <KpiCell icon={Users} label="Active viewers" value={info?.clients ?? 0} hint={`${sessionsCount} sessions`} testId="stat-viewers" />

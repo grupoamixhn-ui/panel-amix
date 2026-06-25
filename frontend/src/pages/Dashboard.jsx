@@ -72,7 +72,7 @@ export default function Dashboard() {
         }
       />
 
-      <div className="p-8 space-y-6">
+      <div className="p-4 md:p-8 space-y-6">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <KpiCell icon={Radio} label="Streams live" value={info?.streams_live ?? 0} suffix={`/ ${info?.streams_total ?? 0}`} accent="text-[var(--live)]" testId="kpi-streams-live" />
           <KpiCell icon={Users} label="Active viewers" value={info?.clients ?? 0} trend="+2.4%" testId="kpi-clients" />
