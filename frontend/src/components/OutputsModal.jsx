@@ -23,8 +23,16 @@ function Url({ item }) {
         {item.protocol}
       </span>
       <div className="min-w-0">
-        <div className="text-xs font-medium text-[var(--text-2)] truncate">{item.label}</div>
+        <div className="text-xs font-medium text-[var(--text-2)] truncate flex items-center gap-2">
+          <span className="truncate">{item.label}</span>
+          {item.port && (
+            <span className="shrink-0 mono text-[9px] px-1.5 py-0.5 rounded bg-[var(--primary-soft)] text-[var(--primary)] font-bold">port {item.port}</span>
+          )}
+        </div>
         <div className="mono text-[11px] text-[var(--muted)] truncate" title={item.url}>{item.url}</div>
+        {item.note && (
+          <div className="text-[10px] text-[var(--muted)] mt-0.5 italic truncate">{item.note}</div>
+        )}
       </div>
       <button
         type="button"

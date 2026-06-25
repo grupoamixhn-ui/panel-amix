@@ -164,6 +164,7 @@ class StreamIn(BaseModel):
     publish_password: str | None = None
     max_bitrate_kbps: int | None = None     # 0 / null = unlimited
     source_timeout: int | None = None        # seconds (default 60 on Flussonic)
+    max_sessions: int | None = None          # per-stream concurrent viewer cap (0 = unlimited)
 
 class StreamUpdateIn(BaseModel):
     url: str | None = None
@@ -171,6 +172,7 @@ class StreamUpdateIn(BaseModel):
     publish_password: str | None = None
     max_bitrate_kbps: int | None = None
     source_timeout: int | None = None
+    max_sessions: int | None = None
 
 class ToggleIn(BaseModel):
     start: bool
@@ -439,6 +441,7 @@ async def streams_create(body: StreamIn, user=Depends(get_current_user)):
             body.name, body.url, body.title, body.publish_password,
             max_bitrate_kbps=body.max_bitrate_kbps,
             source_timeout=body.source_timeout,
+            max_sessions=body.max_sessions,
         )
     except ValueError as e:
         raise HTTPException(status_code=409, detail=str(e))

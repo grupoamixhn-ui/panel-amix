@@ -255,6 +255,20 @@ def _normalize_stream(name: str, data: dict[str, Any]) -> dict[str, Any]:
     # field after the handshake completes).
     if publisher_ip and not publisher_proto:
         publisher_proto = "rtmp"  # safe default for "publish://" w/ a connected peer
+    # Per-stream max_sessions lives under `on_play.max_sessions` in Flussonic v24/v25
+    on_play = data.get("on_play") or {}
+    per_stream_max_sessions = 0
+    if isinstance(on_play, dict):
+        try:
+            per_stream_max_sessions = int(on_play.get("max_sessions") or 0)
+        except (TypeError, ValueError):
+            per_stream_max_sessions = 0
+    # Also accept the legacy top-level key for older builds
+    if per_stream_max_sessions == 0:
+        try:
+            per_stream_max_sessions = int(data.get("max_sessions") or 0)
+        except (TypeError, ValueError):
+            per_stream_max_sessions = 0
     return {
         "name": name,
         "title": data.get("title") or data.get("name") or name,
@@ -268,6 +282,7 @@ def _normalize_stream(name: str, data: dict[str, Any]) -> dict[str, Any]:
         "publish_password": data.get("password") or data.get("publish_password") or "",
         "max_bitrate_kbps": max_bitrate_kbps,
         "source_timeout": int(data.get("source_timeout") or 0),
+        "max_sessions": per_stream_max_sessions,
         "publisher_ip": publisher_ip,
         "publisher_proto": publisher_proto,
     }
@@ -338,13 +353,10 @@ async def get_stream(name: str) -> dict[str, Any] | None:
 async def create_stream(
     name: str, url: str, title: str = "", publish_password: str | None = None,
     *, max_bitrate_kbps: int | None = None, source_timeout: int | None = None,
+    max_sessions: int | None = None,
 ) -> dict[str, Any]:
     cfg = await _active_config()
     async with _make_client(cfg) as c:
-        # For receive-type streams use `publish://` as the input URL — Flussonic
-        # recognises this and lights up the "Allow to publish — Enabled" radio in
-        # its own admin UI. Empty inputs[] would leave it neither enabled nor
-        # disabled, which is what the user was seeing.
         body: dict[str, Any] = {"name": name, "title": title}
         body["inputs"] = [{"url": url or "publish://"}]
         if publish_password:
@@ -353,6 +365,9 @@ async def create_stream(
             body["max_bitrate"] = int(max_bitrate_kbps) * 1000 if max_bitrate_kbps > 0 else 0
         if source_timeout is not None:
             body["source_timeout"] = int(source_timeout)
+        if max_sessions is not None:
+            ms = int(max_sessions)
+            body["on_play"] = {**(body.get("on_play") or {}), "max_sessions": ms if ms > 0 else 0}
         r = await c.put(f"{cfg['api_path']}/streams/{name}", json=body)
         r.raise_for_status()
         return _normalize_stream(name, r.json() if r.content else body)
@@ -361,27 +376,29 @@ async def create_stream(
 async def update_stream(name: str, payload: dict[str, Any]) -> dict[str, Any] | None:
     cfg = await _active_config()
     async with _make_client(cfg) as c:
-        # Flussonic v3 PUT replaces the full stream config. Fetch current, merge, re-PUT.
         g = await c.get(f"{cfg['api_path']}/streams/{name}")
         if g.status_code >= 400:
             return None
         current = g.json() or {}
-        # Build merged body from the on-disk config (avoids sending runtime stats back)
         merged = dict(current.get("config_on_disk") or {})
         merged.setdefault("name", name)
-        # Apply incoming changes
         if "url" in payload and payload["url"]:
             merged["inputs"] = [{"url": payload["url"]}]
         if "title" in payload:
             merged["title"] = payload["title"]
         if "publish_password" in payload:
-            # Flussonic only clears the password when an explicit empty string is sent.
             merged["password"] = payload["publish_password"] or ""
         if "max_bitrate_kbps" in payload:
             kbps = payload["max_bitrate_kbps"]
             merged["max_bitrate"] = (int(kbps) * 1000) if kbps and int(kbps) > 0 else 0
         if "source_timeout" in payload:
             merged["source_timeout"] = int(payload["source_timeout"] or 0)
+        if "max_sessions" in payload:
+            ms = payload["max_sessions"]
+            ms_int = int(ms) if ms and int(ms) > 0 else 0
+            on_play = dict(merged.get("on_play") or {})
+            on_play["max_sessions"] = ms_int
+            merged["on_play"] = on_play
         r = await c.put(f"{cfg['api_path']}/streams/{name}", json=merged)
         r.raise_for_status()
         try:
@@ -1030,7 +1047,25 @@ async def stream_outputs(name: str) -> dict[str, Any]:
             {"label": "HLS (.m3u8)", "protocol": "hls", "url": f"{scheme}://{host}/{name}/index.m3u8"},
             {"label": "HLS Low-Latency", "protocol": "hls", "url": f"{scheme}://{host}/{name}/index_ll.m3u8"},
             {"label": "RTMP pull", "protocol": "rtmp", "url": f"rtmp://{rtmp_host}/static/{name}"},
-            {"label": "SRT pull", "protocol": "srt", "url": f"srt://{host}:{srt_play_p}?streamid={name}"},
+            {
+                "label": "SRT pull (streamid)",
+                "protocol": "srt",
+                "url": f"srt://{host}:{srt_play_p}?streamid={name}",
+                "server": f"srt://{host}:{srt_play_p}",
+                "stream_key": name,
+                "port": srt_play_p,
+                "note": "Most encoders/players (VLC, ffmpeg, IPTV apps) — Flussonic dedicated play port",
+            },
+            {
+                "label": "SRT pull (caller m=request)",
+                "protocol": "srt",
+                # Flussonic-native streamid format for hardware decoders / Haivision Play Pro
+                "url": f"srt://{host}:{srt_play_p}?streamid=#!::r={name},m=request,latency=2000",
+                "server": f"srt://{host}:{srt_play_p}",
+                "stream_key": f"#!::r={name},m=request,latency=2000",
+                "port": srt_play_p,
+                "note": "Use when the player requires the full Flussonic streamid",
+            },
         ],
         "publish": [
             {
