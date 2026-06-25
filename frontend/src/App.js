@@ -10,7 +10,6 @@ import Stats from "./pages/Stats";
 import Monitor from "./pages/Monitor";
 import Resellers from "./pages/Resellers";
 import Settings from "./pages/Settings";
-import Vod from "./pages/Vod";
 import Layout from "./components/Layout";
 
 function Guard({ children }) {
@@ -41,7 +40,6 @@ export default function App() {
             <Route path="/login" element={<LoginRoute />} />
             <Route path="/" element={<Guard><Dashboard /></Guard>} />
             <Route path="/streams" element={<Guard><Streams /></Guard>} />
-            <Route path="/vod" element={<Guard><Vod /></Guard>} />
             <Route path="/sessions" element={<Guard><Sessions /></Guard>} />
             <Route path="/stats" element={<Guard><Stats /></Guard>} />
             <Route path="/monitor" element={<Guard><Monitor /></Guard>} />
