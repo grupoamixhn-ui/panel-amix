@@ -151,7 +151,7 @@ export default function Settings() {
                    : "bg-[var(--warn-soft)] border-[#FDE68A] text-[#B45309]"
           }`}>
             <span className={`dot ${isLive ? "dot-live" : "dot-warn"}`} />
-            <span className="text-xs font-semibold">{isLive ? "LIVE" : "DEMO"} · {info?.version || "—"}</span>
+            <span className="text-xs font-semibold">{isLive ? "CONNECTED" : "NOT CONFIGURED"}{info?.version ? ` · ${info.version}` : ""}</span>
           </div>
         }
       />

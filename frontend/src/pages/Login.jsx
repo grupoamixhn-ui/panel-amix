@@ -81,7 +81,7 @@ export default function Login() {
           </button>
 
           <div className="mt-10 pt-5 border-t border-[var(--border)] text-xs text-[var(--muted)] mono">
-            Demo · admin@flussonic.io / admin123
+            Default · admin@flussonic.io / admin123
           </div>
         </form>
       </div>
