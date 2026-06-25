@@ -10,6 +10,7 @@ import Stats from "./pages/Stats";
 import Monitor from "./pages/Monitor";
 import Resellers from "./pages/Resellers";
 import Settings from "./pages/Settings";
+import Vod from "./pages/Vod";
 import Layout from "./components/Layout";
 
 function Guard({ children }) {
