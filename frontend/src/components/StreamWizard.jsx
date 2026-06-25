@@ -22,7 +22,9 @@ function build(typeId, f) {
       return `srt://${f.host || ""}:${f.port || 9999}${q}`;
     }
     case "srt-listen":
-      return `publish://srt-listener:${f.port || 9998}`;
+      // Server-level `srt_publish { port N; }` block in flussonic.conf handles SRT listen.
+      // The stream source is just publish:// — Flussonic routes by streamid.
+      return `publish://`;
     case "rtmp-pull":
       return `rtmp://${f.host || ""}/${(f.app || "").replace(/^\/+/, "")}${f.key ? `/${f.key}` : ""}`;
     case "rtmp-publish":
@@ -57,9 +59,11 @@ function Fields({ typeId, fields, set }) {
       );
     case "srt-listen":
       return (
-        <div>
-          <Label l="Listen port" /><input className={small} value={fields.port || ""} onChange={(e) => set("port", e.target.value)} placeholder="9998" />
-          <p className="text-[11px] text-[var(--muted)] mt-2">Encoder pushes to <span className="mono">srt://YOUR_HOST:PORT?streamid=publish:STREAM_NAME</span></p>
+        <div className="px-3 py-2 rounded-lg bg-[var(--primary-soft)] border border-blue-100 text-xs text-[var(--text-2)] leading-relaxed">
+          Flussonic will <strong>accept SRT push</strong> on the global port configured in
+          <span className="mono"> srt_publish &#123; port N; &#125;</span> of <span className="mono">flussonic.conf</span>.<br />
+          After saving, OBS / FFmpeg push to:<br />
+          <span className="mono">srt://YOUR_HOST:PORT?streamid=#!::r={fields._name || "STREAM"},m=publish</span>
         </div>
       );
     case "rtmp-pull":
