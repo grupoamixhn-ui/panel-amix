@@ -6,6 +6,7 @@ import OutputsModal from "../components/OutputsModal";
 import StreamClientsModal from "../components/StreamClientsModal";
 import StreamLiveMonitor from "../components/StreamLiveMonitor";
 import PushTargetsModal from "../components/PushTargetsModal";
+import ClientStreamsView from "../components/ClientStreamsView";
 import { useAuth } from "../auth";
 import { Plus, Play, Pause, Trash2, Share2, Search, Pencil, Users, RotateCw, Activity, Send } from "lucide-react";
 
@@ -17,7 +18,12 @@ function statusPill(s) {
 
 export default function Streams() {
   const { user } = useAuth();
-  const isClient = user?.role === "client";
+  // Clients get a card-based UX optimised for non-technical users.
+  if (user?.role === "client") return <ClientStreamsView />;
+  return <AdminStreams />;
+}
+
+function AdminStreams() {
   const [streams, setStreams] = useState([]);
   const [q, setQ] = useState("");
   const [wizardOpen, setWizardOpen] = useState(false);
@@ -27,6 +33,7 @@ export default function Streams() {
   const [monitorFor, setMonitorFor] = useState(null);
   const [pushFor, setPushFor] = useState(null);
   const [resetting, setResetting] = useState({});  // {streamName: true}
+  const isClient = false;
 
   const load = useCallback(async () => {
     try {
