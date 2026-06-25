@@ -25,6 +25,7 @@ from pydantic import BaseModel, EmailStr, Field
 from starlette.middleware.cors import CORSMiddleware
 
 import flussonic
+import updates as updates_module
 
 # ---------- Setup ----------
 mongo_url = os.environ["MONGO_URL"]
@@ -962,6 +963,10 @@ async def rebuild_installer(user=Depends(get_current_user)):
     return {"ok": True, "filename": tarball.name, "size_bytes": tarball.stat().st_size}
 
 
+# ---------- Self-update endpoints ----------
+api.include_router(updates_module.build_router(require_admin))
+
+
 app.include_router(api)
 app.add_middleware(
     CORSMiddleware,
@@ -976,6 +981,7 @@ app.add_middleware(
 @app.on_event("startup")
 async def on_startup():
     flussonic.set_db(db)
+    updates_module.init(db)
     await db.users.create_index("email", unique=True)
     admin_email = os.environ.get("ADMIN_EMAIL", "admin@flussonic.local").lower()
     admin_password = os.environ.get("ADMIN_PASSWORD", "admin123")

@@ -4,7 +4,7 @@ import { useAuth } from "../auth";
 import { useBranding } from "../branding";
 import api from "../api";
 import {
-  Activity, LayoutDashboard, Radio, Users, BarChart3, LogOut, Settings, ShieldCheck, Gauge, Menu, X,
+  Activity, LayoutDashboard, Radio, Users, BarChart3, LogOut, Settings, ShieldCheck, Gauge, Menu, X, ArrowUpCircle,
 } from "lucide-react";
 
 const ALL_NAV = [
@@ -25,6 +25,7 @@ export default function Layout({ children }) {
   const displayBrand = brand_name || "Flussonic";
   const displayTagline = tagline || "NOC Console";
   const [info, setInfo] = useState(null);
+  const [updateAvailable, setUpdateAvailable] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
@@ -33,6 +34,21 @@ export default function Layout({ children }) {
     const t = setInterval(load, 10000);
     return () => clearInterval(t);
   }, []);
+
+  // Poll update status (admin only). Light-weight: ~once every 5 min.
+  useEffect(() => {
+    if (user?.role !== "admin") return;
+    let cancelled = false;
+    const tick = async () => {
+      try {
+        const r = await api.get("/updates/status");
+        if (!cancelled) setUpdateAvailable(!!r.data?.update_available);
+      } catch { /* ignore */ }
+    };
+    tick();
+    const t = setInterval(tick, 5 * 60 * 1000);
+    return () => { cancelled = true; clearInterval(t); };
+  }, [user?.role]);
 
   // Close mobile drawer on route change + lock body scroll while open
   useEffect(() => { setMobileOpen(false); }, [location.pathname]);
@@ -88,7 +104,17 @@ export default function Layout({ children }) {
             }
           >
             <Icon className="w-4 h-4" strokeWidth={2} />
-            <span>{label}</span>
+            <span className="flex-1">{label}</span>
+            {to === "/settings" && updateAvailable && (
+              <span
+                className="flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-[var(--primary)] text-white text-[9px] font-bold uppercase tracking-wider"
+                title="Panel update available"
+                data-testid="nav-update-badge"
+              >
+                <ArrowUpCircle className="w-2.5 h-2.5" />
+                NEW
+              </span>
+            )}
           </NavLink>
         ))}
       </nav>

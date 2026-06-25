@@ -62,6 +62,9 @@ User wants a web admin panel for the Flussonic Media Server API. Confirmed via c
 - ✅ Auto-detection of SRT/RTMP ports via `/api/config/flussonic/detect-ports` (2026-06-25)
 - ✅ RBAC UI restrictions on Streams page for `client` role — hides "New stream", Edit, Delete buttons. Imported `useAuth` from `../auth`. Verified with screenshot using `client.test@flussonic.io` (2026-06-25)
 - ✅ Client role now sees Sessions + Statistics pages, all data scoped to assigned `streams_allowed`. Backend `/server/info` and `/stats` filter KPIs by user scope (admin sees global; reseller/client sees only assigned). Verified: 3 assigned streams → 3 visible, 1 session shown, KPIs reflect scoped totals (2026-06-25)
+- ✅ Installer bug fix: `unbound variable SSL_CERT` in `install.sh` line 232 — moved `SSL_CERT_DIR/SSL_CERT/SSL_KEY` defs above the `.env` block so they're always defined under `set -u` (2026-06-25)
+- ✅ Removed hardcoded "GRUPO AMIX HN" from Login. Brand name + tagline now driven 100% by `/api/branding`. Dynamic favicon: uploaded `logo_data_uri` is applied as `<link rel="icon">`. `document.title = "{brand_name} · {tagline}"` (2026-06-25)
+- ✅ Self-update system: `/api/updates/{status,config,check,upload,apply,rollback}` endpoints + `UpdateSection.jsx` in Settings + sidebar badge "NEW" when update available. Sources: GitHub releases / Custom URL (mirrors any other panel's `/info` endpoint) / Manual upload / Disabled. Quick mode (replace backend+frontend, restart) and Full mode (re-run install.sh). Rollback restores `/opt/flussonic-admin.bak`. Helper script `flussonic-admin-update.sh` + sudoers entry installed by `install.sh`. Auto-check polling every N hours (default 6) (2026-06-25)
 
 ## Prioritized Backlog
 **P1 (post-MVP polish)**

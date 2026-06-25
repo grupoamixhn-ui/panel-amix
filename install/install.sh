@@ -326,6 +326,13 @@ nginx -t && nginx -s reload
 EOF
 chmod 755 "$SSL_HELPER"
 
+# ---------- update helper (panel self-update via sudoers) --------------------
+UPDATE_HELPER="/usr/local/bin/flussonic-admin-update"
+if [[ -f "$SOURCE_DIR/install/flussonic-admin-update.sh" ]]; then
+  install -m 0755 "$SOURCE_DIR/install/flussonic-admin-update.sh" "$UPDATE_HELPER"
+  ok "update helper installed → $UPDATE_HELPER"
+fi
+
 SUDOERS_FILE="/etc/sudoers.d/flussonic-admin"
 cat > "$SUDOERS_FILE" <<EOF
 # Allow the backend service to manage its own TLS cert and reload nginx without password.
@@ -333,9 +340,15 @@ $APP_USER ALL=(root) NOPASSWD: $SSL_HELPER
 $APP_USER ALL=(root) NOPASSWD: /usr/sbin/nginx -s reload
 $APP_USER ALL=(root) NOPASSWD: /usr/sbin/nginx -t
 $APP_USER ALL=(root) NOPASSWD: /usr/bin/certbot
+$APP_USER ALL=(root) NOPASSWD: $UPDATE_HELPER *
 EOF
 chmod 440 "$SUDOERS_FILE"
-visudo -c -f "$SUDOERS_FILE" >/dev/null && ok "sudoers helper installed (SSL self-service)"
+visudo -c -f "$SUDOERS_FILE" >/dev/null && ok "sudoers helper installed (SSL + panel updates)"
+
+# Record current VERSION (used by /api/updates/status)
+if [[ -f "$SOURCE_DIR/VERSION" ]]; then
+  cp -f "$SOURCE_DIR/VERSION" "$APP_DIR/VERSION"
+fi
 
 # ---------- nginx site --------------------------------------------------------
 NGINX_SITE_NAME="flussonic-admin"
