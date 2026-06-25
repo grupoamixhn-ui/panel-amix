@@ -675,10 +675,23 @@ async def get_stream_live_stats(name: str) -> dict[str, Any] | None:
 
 
 async def get_server_limits() -> dict[str, Any]:
-    """Return server-wide limits that are editable via the Flussonic /config endpoint."""
+    """Return server-wide limits + the cache directive (cache is stored in our DB
+    because Flussonic's /config API rejects unknown keys; we expose it back as a
+    flussonic.conf snippet the operator pastes on the streaming server).
+    """
     cfg = await _active_config()
+    cache_path = ""
+    cache_size = ""
+    if _DB is not None:
+        doc = await _DB.config.find_one({"_id": "server_limits"}) or {}
+        cache_path = doc.get("cache_path") or "/storage/flussonic/cache"
+        cache_size = doc.get("cache_size") or "1500G"
     if not cfg["url"]:
-        return {"max_sessions": 0, "client_timeout": 60, "client_timeout_editable": False, "warning": "Flussonic not configured"}
+        return {
+            "max_sessions": 0, "client_timeout": 60, "client_timeout_editable": False,
+            "cache_path": cache_path, "cache_size": cache_size,
+            "warning": "Flussonic not configured",
+        }
     async with _make_client(cfg) as c:
         try:
             r = await c.get(f"{cfg['api_path']}/config")
@@ -687,25 +700,40 @@ async def get_server_limits() -> dict[str, Any]:
             data = {}
     return {
         "max_sessions": int(data.get("max_sessions") or 0),
-        # client_timeout is not API-editable on Flussonic 24.x; show 60 (default) as read-only
         "client_timeout": 60,
         "client_timeout_editable": False,
+        "cache_path": cache_path,
+        "cache_size": cache_size,
     }
 
 
-async def set_server_limits(*, max_sessions: int | None = None) -> dict[str, Any]:
-    """Push allowed server-wide limits to Flussonic via PUT /config (root level)."""
+async def set_server_limits(
+    *, max_sessions: int | None = None,
+    cache_path: str | None = None,
+    cache_size: str | None = None,
+) -> dict[str, Any]:
+    """Push max_sessions to Flussonic, persist cache settings in our DB."""
     cfg = await _active_config()
     if not cfg["url"]:
         raise RuntimeError("Flussonic not configured")
+
+    # Persist cache settings locally — Flussonic API doesn't accept them.
+    if _DB is not None and (cache_path is not None or cache_size is not None):
+        update: dict[str, Any] = {"updated_at": datetime.now(timezone.utc).isoformat()}
+        if cache_path is not None:
+            update["cache_path"] = cache_path.strip()
+        if cache_size is not None:
+            update["cache_size"] = cache_size.strip()
+        await _DB.config.update_one({"_id": "server_limits"}, {"$set": update}, upsert=True)
+
+    # Push to Flussonic only the keys the API actually accepts.
     body: dict[str, Any] = {}
     if max_sessions is not None:
         body["max_sessions"] = int(max_sessions)
-    if not body:
-        return await get_server_limits()
-    async with _make_client(cfg) as c:
-        r = await c.put(f"{cfg['api_path']}/config", json=body)
-        r.raise_for_status()
+    if body:
+        async with _make_client(cfg) as c:
+            r = await c.put(f"{cfg['api_path']}/config", json=body)
+            r.raise_for_status()
     return await get_server_limits()
 
 
@@ -874,3 +902,90 @@ async def stream_outputs(name: str) -> dict[str, Any]:
 
 
 
+
+
+# ---------- Stream pushes (broadcast to YouTube/Facebook/TikTok/Instagram/etc.) ----------
+async def list_stream_pushes(name: str) -> list[dict[str, Any]]:
+    """Return the active push targets of a stream."""
+    cfg = await _active_config()
+    async with _make_client(cfg) as c:
+        r = await c.get(f"{cfg['api_path']}/streams/{name}")
+        r.raise_for_status()
+        d = r.json()
+    pushes_live = d.get("pushes") or []
+    pushes_disk = (d.get("config_on_disk") or {}).get("pushes") or []
+    # Live `pushes` contain runtime stats; merge with disk config for the actual URL.
+    by_url: dict[str, dict[str, Any]] = {}
+    for p in pushes_disk:
+        if isinstance(p, dict) and p.get("url"):
+            by_url[p["url"]] = {"url": p["url"], "label": p.get("title") or _push_label_from_url(p["url"]), "active": False, "bytes": 0}
+    for p in pushes_live:
+        if not isinstance(p, dict):
+            continue
+        u = p.get("url") or p.get("target") or ""
+        if not u:
+            continue
+        entry = by_url.get(u) or {"url": u, "label": _push_label_from_url(u)}
+        entry["active"] = bool(p.get("active") or p.get("alive"))
+        entry["bytes"] = int(p.get("bytes") or p.get("bytes_sent") or 0)
+        entry["status"] = p.get("status") or ""
+        by_url[u] = entry
+    return list(by_url.values())
+
+
+def _push_label_from_url(url: str) -> str:
+    u = (url or "").lower()
+    if "youtube" in u or "ytl.live" in u:
+        return "YouTube"
+    if "facebook" in u or "fbcdn" in u or "live-api" in u or "rtmps://live-api" in u:
+        return "Facebook"
+    if "tiktok" in u or "pull-rtmp" in u and "tiktokcdn" in u:
+        return "TikTok"
+    if "instagram" in u or "rupload" in u:
+        return "Instagram"
+    if "twitch" in u:
+        return "Twitch"
+    if "kick.com" in u:
+        return "Kick"
+    return "Custom RTMP"
+
+
+async def add_stream_push(name: str, url: str, label: str = "") -> dict[str, Any]:
+    """Append a push target to a stream (preserving existing ones)."""
+    if not url:
+        raise ValueError("url is required")
+    cfg = await _active_config()
+    async with _make_client(cfg) as c:
+        r = await c.get(f"{cfg['api_path']}/streams/{name}")
+        r.raise_for_status()
+        d = r.json()
+        on_disk = d.get("config_on_disk") or {}
+        existing = list(on_disk.get("pushes") or [])
+        # Avoid duplicates
+        if any((isinstance(p, dict) and p.get("url") == url) for p in existing):
+            return {"ok": True, "duplicate": True}
+        push_entry: dict[str, Any] = {"url": url}
+        # Note: Flussonic's PUT /streams/{name} rejects `title` inside the push object
+        # (returns 400 extra_keys). We only persist the label in our normalized response.
+        existing.append(push_entry)
+        body = {"name": name, "pushes": existing}
+        # PUT preserves the rest because Flussonic only overwrites the keys we send.
+        r2 = await c.put(f"{cfg['api_path']}/streams/{name}", json=body)
+        r2.raise_for_status()
+    return {"ok": True, "pushes": await list_stream_pushes(name)}
+
+
+async def remove_stream_push(name: str, url: str) -> dict[str, Any]:
+    cfg = await _active_config()
+    async with _make_client(cfg) as c:
+        r = await c.get(f"{cfg['api_path']}/streams/{name}")
+        r.raise_for_status()
+        d = r.json()
+        existing = list((d.get("config_on_disk") or {}).get("pushes") or [])
+        kept = [p for p in existing if not (isinstance(p, dict) and p.get("url") == url)]
+        if len(kept) == len(existing):
+            return {"ok": True, "not_found": True}
+        body = {"name": name, "pushes": kept}
+        r2 = await c.put(f"{cfg['api_path']}/streams/{name}", json=body)
+        r2.raise_for_status()
+    return {"ok": True, "pushes": await list_stream_pushes(name)}

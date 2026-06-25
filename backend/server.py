@@ -488,6 +488,51 @@ async def streams_live_stats(name: str, user=Depends(get_current_user)):
         raise HTTPException(status_code=404, detail="Stream not found")
     return data
 
+# ---------- Stream push targets (YouTube/Facebook/TikTok/Instagram/Custom RTMP) ----------
+class StreamPushIn(BaseModel):
+    url: str
+    label: str = ""
+
+
+@api.get("/streams/{name}/pushes")
+async def stream_pushes_list(name: str, user=Depends(get_current_user)):
+    try:
+        return await flussonic.list_stream_pushes(name)
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(status_code=502, detail=f"Flussonic returned {e.response.status_code}")
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api.post("/streams/{name}/pushes")
+async def stream_push_add(name: str, body: StreamPushIn, user=Depends(get_current_user)):
+    if user.get("role") not in ("admin", "reseller"):
+        raise HTTPException(status_code=403, detail="Admin or reseller only")
+    if not body.url:
+        raise HTTPException(status_code=400, detail="url is required")
+    try:
+        return await flussonic.add_stream_push(name, body.url, body.label)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(status_code=502, detail=f"Flussonic rejected the push ({e.response.status_code})")
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api.delete("/streams/{name}/pushes")
+async def stream_push_remove(name: str, url: str, user=Depends(get_current_user)):
+    if user.get("role") not in ("admin", "reseller"):
+        raise HTTPException(status_code=403, detail="Admin or reseller only")
+    if not url:
+        raise HTTPException(status_code=400, detail="url query param is required")
+    try:
+        return await flussonic.remove_stream_push(name, url)
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(status_code=502, detail=f"Flussonic rejected the request ({e.response.status_code})")
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @api.get("/streams/{name}/sessions")
 async def streams_sessions(name: str, user=Depends(get_current_user)):
@@ -709,6 +754,8 @@ async def ssl_letsencrypt(body: LetsEncryptIn, user=Depends(get_current_user)):
 # ---------- Branding (logo, brand name) ----------
 class ServerLimitsIn(BaseModel):
     max_sessions: int | None = None
+    cache_path: str | None = None
+    cache_size: str | None = None
 
 
 @api.get("/server/limits")
@@ -721,7 +768,11 @@ async def server_limits_put(body: ServerLimitsIn, user=Depends(get_current_user)
     if user.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Admin only")
     try:
-        return await flussonic.set_server_limits(max_sessions=body.max_sessions)
+        return await flussonic.set_server_limits(
+            max_sessions=body.max_sessions,
+            cache_path=body.cache_path,
+            cache_size=body.cache_size,
+        )
     except httpx.HTTPStatusError as e:
         raise HTTPException(
             status_code=502,

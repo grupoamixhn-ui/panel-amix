@@ -5,7 +5,8 @@ import StreamWizard from "../components/StreamWizard";
 import OutputsModal from "../components/OutputsModal";
 import StreamClientsModal from "../components/StreamClientsModal";
 import StreamLiveMonitor from "../components/StreamLiveMonitor";
-import { Plus, Play, Pause, Trash2, Share2, Search, Pencil, Users, RotateCw, Activity } from "lucide-react";
+import PushTargetsModal from "../components/PushTargetsModal";
+import { Plus, Play, Pause, Trash2, Share2, Search, Pencil, Users, RotateCw, Activity, Send } from "lucide-react";
 
 function statusPill(s) {
   if (s.alive) return <span className="pill pill-live"><span className="dot dot-live" />Live</span>;
@@ -21,6 +22,7 @@ export default function Streams() {
   const [outputsFor, setOutputsFor] = useState(null);
   const [clientsFor, setClientsFor] = useState(null);
   const [monitorFor, setMonitorFor] = useState(null);
+  const [pushFor, setPushFor] = useState(null);
   const [resetting, setResetting] = useState({});  // {streamName: true}
 
   const load = useCallback(async () => {
@@ -171,6 +173,14 @@ export default function Streams() {
                           <Activity className="w-3.5 h-3.5" />
                         </button>
                         <button
+                          onClick={() => setPushFor(s.name)}
+                          className="btn-icon"
+                          title="Push to social networks (YouTube/Facebook/TikTok/Instagram/Custom)"
+                          data-testid={`stream-push-${s.name}`}
+                        >
+                          <Send className="w-3.5 h-3.5" />
+                        </button>
+                        <button
                           onClick={() => setClientsFor(s.name)}
                           className="btn-icon"
                           title="Connected clients"
@@ -251,6 +261,10 @@ export default function Streams() {
 
       {monitorFor && (
         <StreamLiveMonitor streamName={monitorFor} onClose={() => setMonitorFor(null)} />
+      )}
+
+      {pushFor && (
+        <PushTargetsModal streamName={pushFor} onClose={() => setPushFor(null)} />
       )}
     </div>
   );

@@ -18,7 +18,7 @@ export default function Settings() {
   const [rebuilding, setRebuilding] = useState(false);
   const [copied, setCopied] = useState("");
   const [limits, setLimits] = useState(null);
-  const [limitsForm, setLimitsForm] = useState({ max_sessions: 400 });
+  const [limitsForm, setLimitsForm] = useState({ max_sessions: 400, cache_path: "/storage/flussonic/cache", cache_size: "1500G" });
   const [limitsSaving, setLimitsSaving] = useState(false);
   const [limitsSaved, setLimitsSaved] = useState(false);
   const [limitsError, setLimitsError] = useState("");
@@ -59,7 +59,11 @@ export default function Settings() {
     api.get("/server/limits")
       .then((r) => {
         setLimits(r.data);
-        setLimitsForm({ max_sessions: r.data?.max_sessions ?? 400 });
+        setLimitsForm({
+          max_sessions: r.data?.max_sessions ?? 400,
+          cache_path: r.data?.cache_path || "/storage/flussonic/cache",
+          cache_size: r.data?.cache_size || "1500G",
+        });
       })
       .catch(() => setLimits(null));
   }, []);
@@ -67,9 +71,17 @@ export default function Settings() {
   const saveLimits = async () => {
     setLimitsError(""); setLimitsSaving(true);
     try {
-      const r = await api.put("/server/limits", { max_sessions: Number(limitsForm.max_sessions) || 0 });
+      const r = await api.put("/server/limits", {
+        max_sessions: Number(limitsForm.max_sessions) || 0,
+        cache_path: limitsForm.cache_path,
+        cache_size: limitsForm.cache_size,
+      });
       setLimits(r.data);
-      setLimitsForm({ max_sessions: r.data.max_sessions });
+      setLimitsForm({
+        max_sessions: r.data.max_sessions,
+        cache_path: r.data.cache_path || "/storage/flussonic/cache",
+        cache_size: r.data.cache_size || "1500G",
+      });
       setLimitsSaved(true); setTimeout(() => setLimitsSaved(false), 2000);
     } catch (e) {
       setLimitsError(e?.response?.data?.detail || e.message || "Save failed");
@@ -481,29 +493,62 @@ export default function Settings() {
               </div>
             </div>
 
+            {/* Cache directive (stored locally, copy to flussonic.conf) */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-4">
+              <div className="md:col-span-2">
+                <label className="text-xs font-medium text-[var(--text-2)] block mb-1.5">Disk cache path</label>
+                <input
+                  type="text"
+                  value={limitsForm.cache_path}
+                  onChange={(e) => setLimitsForm({ ...limitsForm, cache_path: e.target.value })}
+                  placeholder="/storage/flussonic/cache"
+                  className="w-full px-3 py-2.5 text-sm mono"
+                  data-testid="server-limits-cache-path"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-[var(--text-2)] block mb-1.5">Cache size</label>
+                <input
+                  type="text"
+                  value={limitsForm.cache_size}
+                  onChange={(e) => setLimitsForm({ ...limitsForm, cache_size: e.target.value })}
+                  placeholder="1500G"
+                  className="w-full px-3 py-2.5 text-sm mono"
+                  data-testid="server-limits-cache-size"
+                />
+              </div>
+            </div>
+
             {/* Client timeout config snippet */}
-            <details className="mt-3">
+            <details className="mt-3" open>
               <summary className="text-[11px] text-[var(--primary)] cursor-pointer hover:underline select-none">
-                Show flussonic.conf snippet for client_timeout →
+                Show full flussonic.conf snippet (paste on the streaming server) →
               </summary>
               <div className="mt-2 relative rounded-lg bg-[#0F172A] text-[#E2E8F0] p-3 font-mono text-[11px] leading-relaxed">
                 <button
-                  onClick={() => copyText("client-timeout-conf", "sessions {\n  client_timeout 60;\n  max_sessions 400;\n}")}
+                  onClick={() => copyText("flu-conf", `# Server-wide limits\nmax_sessions ${limitsForm.max_sessions || 400};\nsource_timeout 60;\n\n# SRT publish (single port for push & play)\nsrt {\n  port 9998;\n}\n\n# Disk file caches\ncache ${limitsForm.cache_path || "/storage/flussonic/cache"} ${limitsForm.cache_size || "1500G"};\n`)}
                   className="absolute top-2 right-2 p-1.5 rounded-md bg-white/10 hover:bg-white/20 text-white"
                   title="Copy"
-                  data-testid="copy-client-timeout-conf"
+                  data-testid="copy-flussonic-conf"
                 >
                   <Copy className="w-3.5 h-3.5" />
                 </button>
-                <pre className="whitespace-pre pr-8">{`sessions {
-  client_timeout 60;
-  max_sessions 400;
-}`}</pre>
-                {copied === "client-timeout-conf" && (
+                <pre className="whitespace-pre pr-8">{`# Server-wide limits
+max_sessions ${limitsForm.max_sessions || 400};
+source_timeout 60;
+
+# SRT publish (single port for push & play)
+srt {
+  port 9998;
+}
+
+# Disk file caches
+cache ${limitsForm.cache_path || "/storage/flussonic/cache"} ${limitsForm.cache_size || "1500G"};`}</pre>
+                {copied === "flu-conf" && (
                   <div className="absolute bottom-2 right-2 text-[10px] mono text-emerald-400">copied ✓</div>
                 )}
                 <div className="text-[10px] text-slate-400 mt-2">
-                  After editing, run <span className="mono text-slate-200">systemctl reload flussonic</span>.
+                  After editing <span className="mono text-slate-200">/etc/flussonic/flussonic.conf</span>, run <span className="mono text-slate-200">systemctl reload flussonic</span>.
                 </div>
               </div>
             </details>
@@ -518,7 +563,7 @@ export default function Settings() {
             <div className="flex items-center gap-2 mt-4">
               <button
                 onClick={saveLimits}
-                disabled={limitsSaving || Number(limitsForm.max_sessions) === limits.max_sessions}
+                disabled={limitsSaving}
                 className="btn btn-primary"
                 data-testid="server-limits-save-btn"
               >
