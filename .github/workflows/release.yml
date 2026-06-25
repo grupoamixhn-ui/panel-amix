@@ -1,0 +1,82 @@
+name: Build & Release tarball
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve version
+        id: ver
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/v}"
+          else
+            VERSION="$(date +%Y.%m.%d)-${GITHUB_SHA::7}"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "name=flussonic-admin-${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tarball=flussonic-admin-${VERSION}.tar.gz" >> "$GITHUB_OUTPUT"
+
+      - name: Build tarball
+        run: |
+          chmod +x install/make-release.sh
+          bash install/make-release.sh --version "${{ steps.ver.outputs.version }}"
+
+      - name: Compute checksum
+        id: sum
+        run: |
+          cd dist
+          SHA=$(sha256sum "${{ steps.ver.outputs.tarball }}" | cut -d' ' -f1)
+          SIZE=$(du -h "${{ steps.ver.outputs.tarball }}" | cut -f1)
+          echo "sha256=$SHA" >> "$GITHUB_OUTPUT"
+          echo "size=$SIZE" >> "$GITHUB_OUTPUT"
+          {
+            echo "## Flussonic Admin Panel — ${{ steps.ver.outputs.version }}"
+            echo ""
+            echo "Self-hosted release tarball ready for any Ubuntu / Debian / AlmaLinux / Rocky VPS."
+            echo ""
+            echo "| Field | Value |"
+            echo "|---|---|"
+            echo "| Tarball | \`${{ steps.ver.outputs.tarball }}\` |"
+            echo "| Size | $SIZE |"
+            echo "| SHA-256 | \`$SHA\` |"
+            echo ""
+            echo "### Quick install"
+            echo ""
+            echo '```bash'
+            echo "curl -fsSL https://github.com/${{ github.repository }}/releases/download/v${{ steps.ver.outputs.version }}/${{ steps.ver.outputs.tarball }} -o /tmp/flussonic-admin.tar.gz"
+            echo "cd /tmp && tar xzf flussonic-admin.tar.gz && cd ${{ steps.ver.outputs.name }}"
+            echo "sudo bash install/install.sh"
+            echo '```'
+          } > /tmp/release-notes.md
+
+      - name: Upload build artifact (always, even on branch push)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.ver.outputs.name }}
+          path: dist/${{ steps.ver.outputs.tarball }}
+          retention-days: 30
+
+      - name: Create GitHub Release (tags only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          body_path: /tmp/release-notes.md
+          files: dist/${{ steps.ver.outputs.tarball }}
+          draft: false
+          prerelease: false

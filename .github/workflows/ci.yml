@@ -1,0 +1,52 @@
+name: CI — lint backend + build frontend
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install deps
+        run: |
+          cd backend
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install ruff
+      - name: Lint
+        run: |
+          cd backend
+          ruff check . || true        # don't fail the build on style yet
+          python -m py_compile server.py flussonic.py
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install + build
+        run: |
+          cd frontend
+          corepack enable
+          yarn install --frozen-lockfile
+          echo "REACT_APP_BACKEND_URL=" > .env
+          yarn build
+
+  bash:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Syntax-check install scripts
+        run: |
+          bash -n install/install.sh
+          bash -n install/uninstall.sh
+          bash -n install/make-release.sh
