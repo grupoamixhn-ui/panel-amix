@@ -753,12 +753,13 @@ async def set_server_limits(
 async def get_branding() -> dict[str, Any]:
     if _DB is None:
         return {
-            "logo_data_uri": "", "brand_name": "", "tagline": "",
+            "logo_data_uri": "", "favicon_data_uri": "", "brand_name": "", "tagline": "",
             "primary_color": "", "primary_hover": "", "primary_soft": "",
         }
     doc = await _DB.config.find_one({"_id": "branding"}) or {}
     return {
         "logo_data_uri": doc.get("logo_data_uri", ""),
+        "favicon_data_uri": doc.get("favicon_data_uri", ""),
         "brand_name": doc.get("brand_name", ""),
         "tagline": doc.get("tagline", ""),
         "primary_color": doc.get("primary_color", ""),
@@ -770,6 +771,7 @@ async def get_branding() -> dict[str, Any]:
 async def save_branding(
     *,
     logo_data_uri: str | None = None,
+    favicon_data_uri: str | None = None,
     brand_name: str | None = None,
     tagline: str | None = None,
     primary_color: str | None = None,
@@ -781,6 +783,8 @@ async def save_branding(
     update: dict[str, Any] = {"updated_at": datetime.now(timezone.utc).isoformat()}
     if logo_data_uri is not None:
         update["logo_data_uri"] = logo_data_uri
+    if favicon_data_uri is not None:
+        update["favicon_data_uri"] = favicon_data_uri
     if brand_name is not None:
         update["brand_name"] = brand_name
     if tagline is not None:
@@ -798,6 +802,12 @@ async def save_branding(
 async def clear_branding_logo() -> dict[str, Any]:
     if _DB is not None:
         await _DB.config.update_one({"_id": "branding"}, {"$set": {"logo_data_uri": ""}}, upsert=True)
+    return await get_branding()
+
+
+async def clear_branding_favicon() -> dict[str, Any]:
+    if _DB is not None:
+        await _DB.config.update_one({"_id": "branding"}, {"$set": {"favicon_data_uri": ""}}, upsert=True)
     return await get_branding()
 
 

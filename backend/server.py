@@ -821,6 +821,8 @@ async def branding_get():
 
 _LOGO_MAX_BYTES = 1_000_000  # 1MB
 _LOGO_MIME = {"image/png", "image/jpeg", "image/jpg", "image/svg+xml", "image/webp", "image/gif"}
+_FAVICON_MAX_BYTES = 300_000  # 300 KB
+_FAVICON_MIME = {"image/png", "image/x-icon", "image/vnd.microsoft.icon", "image/svg+xml", "image/jpeg", "image/webp"}
 import re as _re
 _HEX_COLOR_RE = _re.compile(r"^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$")
 
@@ -836,6 +838,7 @@ def _validate_color(value: str | None, field: str) -> str | None:
 @api.post("/branding")
 async def branding_post(
     logo: UploadFile | None = File(default=None),
+    favicon: UploadFile | None = File(default=None),
     brand_name: str | None = Form(default=None),
     tagline: str | None = Form(default=None),
     primary_color: str | None = Form(default=None),
@@ -851,8 +854,19 @@ async def branding_post(
         if len(blob) > _LOGO_MAX_BYTES:
             raise HTTPException(status_code=413, detail="Logo file too large (max 1MB)")
         data_uri = f"data:{logo.content_type};base64,{base64.b64encode(blob).decode()}"
+
+    favicon_uri: str | None = None
+    if favicon is not None:
+        if favicon.content_type not in _FAVICON_MIME:
+            raise HTTPException(status_code=400, detail=f"Unsupported favicon type: {favicon.content_type}")
+        fblob = await favicon.read()
+        if len(fblob) > _FAVICON_MAX_BYTES:
+            raise HTTPException(status_code=413, detail="Favicon file too large (max 300KB)")
+        favicon_uri = f"data:{favicon.content_type};base64,{base64.b64encode(fblob).decode()}"
+
     return await flussonic.save_branding(
         logo_data_uri=data_uri,
+        favicon_data_uri=favicon_uri,
         brand_name=brand_name,
         tagline=tagline,
         primary_color=_validate_color(primary_color, "primary_color"),
@@ -864,6 +878,11 @@ async def branding_post(
 @api.delete("/branding/logo")
 async def branding_logo_clear(user=Depends(get_current_user)):
     return await flussonic.clear_branding_logo()
+
+
+@api.delete("/branding/favicon")
+async def branding_favicon_clear(user=Depends(get_current_user)):
+    return await flussonic.clear_branding_favicon()
 
 
 @api.get("/")

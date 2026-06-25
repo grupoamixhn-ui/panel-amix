@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useState } from "rea
 import api from "./api";
 
 const EMPTY = {
-  logo_data_uri: "", brand_name: "", tagline: "",
+  logo_data_uri: "", favicon_data_uri: "", brand_name: "", tagline: "",
   primary_color: "", primary_hover: "", primary_soft: "",
 };
 
@@ -22,18 +22,22 @@ function applyBrandColors({ primary_color, primary_hover, primary_soft }) {
 
 // Update the browser-tab favicon + document title from the uploaded brand
 // assets, so the deployed panel can be re-skinned without rebuilding the app.
-function applyBrandTab({ logo_data_uri, brand_name, tagline }) {
+function applyBrandTab({ logo_data_uri, favicon_data_uri, brand_name, tagline }) {
   const name = (brand_name || "").trim() || "Flussonic Admin";
   document.title = tagline ? `${name} · ${tagline}` : name;
 
-  if (!logo_data_uri) return;
+  // Prefer a dedicated favicon upload; fall back to the logo.
+  const iconUri = favicon_data_uri || logo_data_uri;
+  if (!iconUri) return;
   // Remove any pre-existing icon links so the new one wins
   document.querySelectorAll('link[rel~="icon"], link[rel="shortcut icon"], link[rel="apple-touch-icon"]')
     .forEach((el) => el.parentNode && el.parentNode.removeChild(el));
   const link = document.createElement("link");
   link.rel = "icon";
-  link.type = logo_data_uri.startsWith("data:image/svg") ? "image/svg+xml" : "image/png";
-  link.href = logo_data_uri;
+  if (iconUri.startsWith("data:image/svg")) link.type = "image/svg+xml";
+  else if (iconUri.includes("image/x-icon") || iconUri.includes("vnd.microsoft.icon")) link.type = "image/x-icon";
+  else link.type = "image/png";
+  link.href = iconUri;
   document.head.appendChild(link);
 }
 

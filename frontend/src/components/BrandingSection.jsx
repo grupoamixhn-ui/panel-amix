@@ -96,6 +96,7 @@ export default function BrandingSection() {
   const [err, setErr] = useState("");
   const [savedFlash, setSavedFlash] = useState(false);
   const fileRef = useRef(null);
+  const faviconRef = useRef(null);
 
   useEffect(() => {
     setBrandName(branding.brand_name || "");
@@ -207,6 +208,36 @@ export default function BrandingSection() {
     } finally { setBusy(false); }
   };
 
+  const uploadFavicon = async (file) => {
+    setErr(""); setBusy(true);
+    try {
+      const fd = new FormData();
+      fd.append("favicon", file);
+      await api.post("/branding", fd, { headers: { "Content-Type": "multipart/form-data" } });
+      await branding.reload();
+      setSavedFlash(true); setTimeout(() => setSavedFlash(false), 2000);
+    } catch (e) {
+      setErr(e.response?.data?.detail || e.message);
+    } finally { setBusy(false); }
+  };
+
+  const removeFavicon = async () => {
+    if (!window.confirm("Remove the custom favicon? The logo (or default) will be used instead.")) return;
+    setErr(""); setBusy(true);
+    try {
+      await api.delete("/branding/favicon");
+      await branding.reload();
+    } catch (e) {
+      setErr(e.response?.data?.detail || e.message);
+    } finally { setBusy(false); }
+  };
+
+  const onPickFavicon = (e) => {
+    const f = e.target.files?.[0];
+    if (f) uploadFavicon(f);
+    e.target.value = "";
+  };
+
   const onPick = (e) => {
     const f = e.target.files?.[0];
     if (f) upload(f);
@@ -275,6 +306,55 @@ export default function BrandingSection() {
           <p className="text-[11px] text-[var(--muted)] mt-2 leading-relaxed">
             PNG / JPG / SVG / WebP — up to 1 MB. Transparent PNG/SVG looks best.
           </p>
+
+          {/* Favicon (browser tab icon) */}
+          <div className="mt-5 pt-5 border-t border-[var(--border)]">
+            <div className="text-xs font-medium text-[var(--text-2)] mb-2">Favicon (browser tab icon)</div>
+            <div className="flex items-center gap-3" data-testid="branding-favicon-row">
+              <div className="w-12 h-12 rounded-lg border border-[var(--border)] bg-[var(--surface-2)] flex items-center justify-center overflow-hidden shrink-0" data-testid="branding-favicon-preview">
+                {branding.favicon_data_uri ? (
+                  <img src={branding.favicon_data_uri} alt="favicon" className="max-w-full max-h-full object-contain" />
+                ) : branding.logo_data_uri ? (
+                  <img src={branding.logo_data_uri} alt="logo-fallback" className="max-w-full max-h-full object-contain opacity-60" />
+                ) : (
+                  <ImageIcon className="w-5 h-5 opacity-40" />
+                )}
+              </div>
+              <input
+                ref={faviconRef}
+                type="file"
+                accept="image/x-icon,image/vnd.microsoft.icon,image/png,image/svg+xml,image/webp,image/jpeg,.ico"
+                onChange={onPickFavicon}
+                className="hidden"
+                data-testid="branding-favicon-input"
+              />
+              <button
+                type="button"
+                onClick={() => faviconRef.current?.click()}
+                disabled={busy}
+                className="btn btn-primary"
+                data-testid="branding-favicon-upload-button"
+              >
+                <Upload className="w-3.5 h-3.5" /> {branding.favicon_data_uri ? "Replace favicon" : "Upload favicon"}
+              </button>
+              {branding.favicon_data_uri && (
+                <button
+                  type="button"
+                  onClick={removeFavicon}
+                  disabled={busy}
+                  className="btn btn-ghost text-[var(--error)] hover:border-[var(--error)]"
+                  data-testid="branding-favicon-remove-button"
+                  title="Remove favicon"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+            <p className="text-[11px] text-[var(--muted)] mt-2 leading-relaxed">
+              ICO / PNG / SVG — up to 300 KB. If empty, the logo is used as favicon.
+              <br />Tip: 32×32 or 64×64 square PNG/SVG looks best on browser tabs.
+            </p>
+          </div>
         </div>
 
         {/* Brand name + tagline */}
