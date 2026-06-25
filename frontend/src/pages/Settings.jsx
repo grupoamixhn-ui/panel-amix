@@ -206,12 +206,16 @@ export default function Settings() {
         }
       />
 
-      <div className="p-4 md:p-8 max-w-4xl mx-auto space-y-6">
-        <BrandingSection />
+      <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6">
+        {/* 2-column layout — branding/visual left, infra/integration right */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <div className="lg:col-span-5 space-y-6">
+            <BrandingSection />
+          </div>
+          <div className="lg:col-span-7 space-y-6">
+            <UpdateSection />
 
-        <UpdateSection />
-
-        <SslSection />
+            <SslSection />
 
         {/* Connection form */}
         <div className="cell p-6" data-testid="settings-connection">
@@ -525,6 +529,9 @@ export default function Settings() {
             </p>
           </div>
         )}
+
+          </div>
+        </div>
 
         {/* Quick references */}
         <div className="cell p-6" data-testid="settings-help">
