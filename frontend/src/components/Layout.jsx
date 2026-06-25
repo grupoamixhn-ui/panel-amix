@@ -32,7 +32,7 @@ export default function Layout({ children }) {
     return () => clearInterval(t);
   }, []);
 
-  const isDemo = info?.mode !== "live";
+  const connected = !!info?.streams_total || info?.mode === "live";
   const navItems = ALL_NAV.filter((n) => n.roles.includes(user?.role || "admin"));
 
   return (
@@ -77,20 +77,20 @@ export default function Layout({ children }) {
         </nav>
 
         <div className={`m-3 mt-2 p-3 rounded-xl border ${
-          isDemo
-            ? "border-[var(--border)] bg-gradient-to-br from-[var(--primary-soft)] to-white"
-            : "border-[#BBF7D0] bg-gradient-to-br from-[var(--live-soft)] to-white"
+          connected
+            ? "border-[#BBF7D0] bg-gradient-to-br from-[var(--live-soft)] to-white"
+            : "border-[var(--border)] bg-gradient-to-br from-[var(--primary-soft)] to-white"
         }`}>
           <div className="flex items-center gap-2 mb-0.5">
-            <span className={`dot ${isDemo ? "dot-warn" : "dot-live"}`} />
+            <span className={`dot ${connected ? "dot-live" : "dot-warn"}`} />
             <div className="text-xs font-semibold text-[var(--text)]">
-              {isDemo ? "Demo mode" : "Live · connected"}
+              {connected ? "Live · connected" : "Not connected"}
             </div>
           </div>
           <div className="text-[11px] text-[var(--muted)] leading-snug">
-            {isDemo
-              ? "Connect a real Flussonic server in Settings."
-              : `${info?.streams_live ?? 0}/${info?.streams_total ?? 0} streams · ${info?.clients ?? 0} viewers`}
+            {connected
+              ? `${info?.streams_live ?? 0}/${info?.streams_total ?? 0} streams · ${info?.clients ?? 0} viewers`
+              : "Connect a real Flussonic server in Settings."}
           </div>
         </div>
 

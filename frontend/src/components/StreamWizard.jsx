@@ -156,6 +156,8 @@ export default function StreamWizard({ initial, onClose, onSaved, onDeleted }) {
   const [typeId, setTypeId] = useState(initial ? "custom" : "srt-pull");
   const [fields, setFields] = useState(initial ? { url: initial?.inputs?.[0]?.url || "" } : { port: 9999 });
   const [publishPassword, setPublishPassword] = useState(initial?.publish_password || "");
+  const [maxBitrateKbps, setMaxBitrateKbps] = useState(initial?.max_bitrate_kbps || 0);
+  const [sourceTimeout, setSourceTimeout] = useState(initial?.source_timeout || 60);
   const [showPw, setShowPw] = useState(false);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
@@ -169,7 +171,12 @@ export default function StreamWizard({ initial, onClose, onSaved, onDeleted }) {
     setBusy(true); setErr("");
     try {
       if (!url) { setErr("Source URL is empty"); setBusy(false); return; }
-      const payload = { url, title, publish_password: publishPassword || "" };
+      const payload = {
+        url, title,
+        publish_password: publishPassword || "",
+        max_bitrate_kbps: Number(maxBitrateKbps) || 0,
+        source_timeout: Number(sourceTimeout) || 0,
+      };
       if (editing) {
         await api.put(`/streams/${name}`, payload);
       } else {
@@ -301,6 +308,49 @@ export default function StreamWizard({ initial, onClose, onSaved, onDeleted }) {
                 {showPw ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
               </button>
             </div>
+          </div>
+
+          {/* Limits & timeouts */}
+          <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-4 py-3 mb-5" data-testid="stream-form-limits">
+            <div className="text-xs font-semibold mb-3">Limits &amp; timeouts <span className="text-[var(--muted)] font-normal">· optional</span></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label l="Max input bitrate (kbps)" />
+                <input
+                  data-testid="stream-form-max-bitrate"
+                  type="number" min="0" step="100"
+                  value={maxBitrateKbps}
+                  onChange={(e) => setMaxBitrateKbps(e.target.value)}
+                  placeholder="0 = unlimited"
+                  className="w-full px-3 py-2 text-sm mono"
+                />
+                <p className="text-[10px] text-[var(--muted)] mt-1 leading-snug">
+                  Cap the maximum incoming bitrate. Flussonic will drop frames above this. <strong>0 = no cap</strong>.
+                </p>
+              </div>
+              <div>
+                <Label l="Source timeout (s)" />
+                <input
+                  data-testid="stream-form-source-timeout"
+                  type="number" min="0" step="1"
+                  value={sourceTimeout}
+                  onChange={(e) => setSourceTimeout(e.target.value)}
+                  placeholder="60"
+                  className="w-full px-3 py-2 text-sm mono"
+                />
+                <p className="text-[10px] text-[var(--muted)] mt-1 leading-snug">
+                  Wait this many seconds before declaring the source dead. Recommended <strong>60</strong>.
+                </p>
+              </div>
+            </div>
+            <details className="mt-3 group">
+              <summary className="text-[11px] text-[var(--muted)] cursor-pointer hover:text-[var(--text-2)] select-none">
+                Server-wide limits (max sessions, client timeout) →
+              </summary>
+              <div className="mt-2 text-[11px] text-[var(--muted)] leading-snug">
+                <code className="mono text-[10px]">max_sessions</code> and <code className="mono text-[10px]">client_timeout</code> are <strong>global</strong> settings in Flussonic and can&apos;t be edited per-stream via the API. Edit them in <code className="mono text-[10px]">/etc/flussonic/flussonic.conf</code> under <code className="mono text-[10px]">sessions {"{ max_sessions 400; client_timeout 60; }"}</code> then restart Flussonic.
+              </div>
+            </details>
           </div>
 
           {/* Outputs preview */}

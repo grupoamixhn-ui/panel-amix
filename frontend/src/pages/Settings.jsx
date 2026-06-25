@@ -7,7 +7,7 @@ import { Zap, Cable, CheckCircle2, XCircle, Loader2, Trash2, Download, Copy, Ref
 export default function Settings() {
   const [info, setInfo] = useState(null);
   const [cfg, setCfg] = useState(null);          // current persisted config
-  const [form, setForm] = useState({ url: "", user: "", password: "", demo_mode: false, api_path: "" });
+  const [form, setForm] = useState({ url: "", user: "", password: "", api_path: "" });
   const [touched, setTouched] = useState(false); // whether the user edited the form
   const [testing, setTesting] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -29,7 +29,6 @@ export default function Settings() {
         url: c.data.url || "",
         user: c.data.user || "",
         password: "",
-        demo_mode: !!c.data.demo_mode,
         api_path: c.data.api_path || "",
         public_host: c.data.public_host || "",
         srt_port: c.data.srt_port || 9998,
@@ -111,7 +110,6 @@ export default function Settings() {
       const body = {
         url: form.url,
         user: form.user,
-        demo_mode: form.demo_mode,
         api_path: form.api_path || null,
         public_host: form.public_host || "",
         srt_port: Number(form.srt_port) || 9998,
@@ -131,10 +129,10 @@ export default function Settings() {
   };
 
   const reset = async () => {
-    if (!window.confirm("Clear stored Flussonic config and return to DEMO mode?")) return;
+    if (!window.confirm("Clear stored Flussonic connection settings?")) return;
     await api.post("/config/flussonic/clear");
     await loadAll();
-    setForm({ url: "", user: "", password: "", demo_mode: false, api_path: "", public_host: "", srt_port: 9998, rtmp_port: 1935, https: true });
+    setForm({ url: "", user: "", password: "", api_path: "", public_host: "", srt_port: 9998, rtmp_port: 1935, https: true });
     setTestResult(null);
     setTouched(false);
   };
@@ -212,19 +210,6 @@ export default function Settings() {
               />
             </div>
           </div>
-
-          <label className="flex items-center gap-2.5 mt-5 text-sm cursor-pointer select-none" data-testid="config-demo-toggle">
-            <input
-              type="checkbox"
-              checked={form.demo_mode}
-              onChange={(e) => onField("demo_mode", e.target.checked)}
-              className="w-4 h-4 accent-[var(--primary)]"
-            />
-            <span>
-              Demo mode (ignore real server and show mock data)
-              <span className="block text-xs text-[var(--muted)]">Useful while you set up the server or troubleshoot.</span>
-            </span>
-          </label>
 
           <details className="mt-5 group">
             <summary className="text-xs font-medium text-[var(--text-2)] cursor-pointer select-none hover:text-[var(--primary)]">

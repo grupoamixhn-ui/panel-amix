@@ -114,7 +114,7 @@ export default function Login() {
           <div className="grid grid-cols-3 gap-6 mono text-xs">
             <div><div className="text-[10px] uppercase tracking-widest text-white/50">Region</div><div className="mt-1.5">us-east-1</div></div>
             <div><div className="text-[10px] uppercase tracking-widest text-white/50">API</div><div className="mt-1.5">v3.admin</div></div>
-            <div><div className="text-[10px] uppercase tracking-widest text-white/50">Build</div><div className="mt-1.5">24.03.demo</div></div>
+            <div><div className="text-[10px] uppercase tracking-widest text-white/50">Build</div><div className="mt-1.5">24.03</div></div>
           </div>
         </div>
       </div>

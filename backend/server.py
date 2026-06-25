@@ -160,11 +160,15 @@ class StreamIn(BaseModel):
     url: str = Field(min_length=1)
     title: str = ""
     publish_password: str | None = None
+    max_bitrate_kbps: int | None = None     # 0 / null = unlimited
+    source_timeout: int | None = None        # seconds (default 60 on Flussonic)
 
 class StreamUpdateIn(BaseModel):
     url: str | None = None
     title: str | None = None
     publish_password: str | None = None
+    max_bitrate_kbps: int | None = None
+    source_timeout: int | None = None
 
 class ToggleIn(BaseModel):
     start: bool
@@ -174,7 +178,6 @@ class FlussonicConfigIn(BaseModel):
     url: str = ""
     user: str = ""
     password: str | None = None  # None = keep existing
-    demo_mode: bool = False
     api_path: str | None = None
     public_host: str | None = None
     srt_port: int | None = None
@@ -416,7 +419,11 @@ async def streams_list(user=Depends(get_current_user)):
 @api.post("/streams")
 async def streams_create(body: StreamIn, user=Depends(get_current_user)):
     try:
-        return await flussonic.create_stream(body.name, body.url, body.title, body.publish_password)
+        return await flussonic.create_stream(
+            body.name, body.url, body.title, body.publish_password,
+            max_bitrate_kbps=body.max_bitrate_kbps,
+            source_timeout=body.source_timeout,
+        )
     except ValueError as e:
         raise HTTPException(status_code=409, detail=str(e))
 
@@ -501,7 +508,7 @@ async def config_get(user=Depends(get_current_user)):
 async def config_put(body: FlussonicConfigIn, user=Depends(get_current_user)):
     await flussonic.save_config(
         url=body.url, user=body.user, password=body.password,
-        demo_mode=body.demo_mode, api_path=body.api_path,
+        api_path=body.api_path,
         public_host=body.public_host, srt_port=body.srt_port,
         rtmp_port=body.rtmp_port, https=body.https,
     )

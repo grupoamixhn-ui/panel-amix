@@ -1,0 +1,46 @@
+{
+  "summary": "Iteration 7 — Verified (A) DEMO_MODE removal from backend+frontend, (B) RTMP publish URL now includes /static/ application path, and (C) new per-stream fields max_bitrate_kbps + source_timeout. Backend: created /app/backend/tests/test_streams_limits_and_rtmp.py (8 tests, ALL PASS). Frontend: Playwright verified the wizard 'Limits & timeouts' section with both inputs (defaults 0 / 60), the collapsible 'Server-wide limits' details mentioning /etc/flussonic/flussonic.conf with max_sessions=400 and client_timeout=60, the Login page Build='24.03' (no .demo), the sidebar pill 'Live · connected', and the absence of the Settings demo toggle. Tudn was restored to defaults (cap=0, timeout=60) at the end.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "test suite (full run)", "issue": "When the full pytest suite runs together (test_backend.py, test_monitor_and_branding_colors.py, test_monitor_and_publish_password.py, test_stream_reset.py) some tests fail due to cross-test interference on the shared live Tudn/test streams + branding state. Each suite passes in isolation; ITERATION 7 file passes 8/8 standalone. Pre-existing — not introduced by this iteration."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Login page", "issues": ["Bottom credential hint still reads 'Demo · admin@flussonic.io / admin123'. The word 'Demo' here is a leftover label (not a 'Demo mode' toggle, but cosmetically inconsistent with the demo-mode removal). Consider rewording to e.g. 'Default · admin@flussonic.io / admin123'."]},
+      {"screen": "Settings page", "issues": ["The connection status badge still uses fallback text 'LIVE / DEMO · vXX' (Settings.jsx:154). With DEMO_MODE removed this DEMO fallback can never be hit in practice, but the literal word 'DEMO' remains in the JSX. Recommend replacing with 'Connected / Not configured'."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_streams_limits_and_rtmp.py",
+    "/app/test_reports/pytest/iter7_results.xml"
+  ],
+  "action_items": [
+    "(cosmetic) /app/frontend/src/pages/Login.jsx line 84 — change 'Demo · ' credential hint to e.g. 'Default ·' so no 'Demo' word remains.",
+    "(cosmetic) /app/frontend/src/pages/Settings.jsx line 154 — replace 'LIVE / DEMO' literal fallback with 'Connected / Not configured' to fully align with demo-mode removal.",
+    "(low) Pre-existing failures in test_backend.py / test_stream_reset.py when running the FULL suite — race/interference on shared real-server state. Not blocking this iteration. Optional refactor: serialize tests using --forked or mark them with @pytest.mark.serial."
+  ],
+  "critical_code_review_comments": [
+    "server.py:158-172 — StreamIn / StreamUpdateIn correctly add max_bitrate_kbps and source_timeout as optional ints; create endpoint forwards them as kwargs; update_stream uses .model_dump(exclude_none=True) so title-only PUTs do NOT clobber existing limits.",
+    "server.py:177-186 — FlussonicConfigIn no longer has demo_mode; extra demo_mode keys sent in PUT body are silently ignored by Pydantic (verified — returns 200, demo_mode not echoed back). save_config() signature matches the body fields exactly.",
+    "flussonic.py:206-210 — max_bitrate_kbps conversion from Flussonic's bytes/s representation: int(raw*8/1000). Round-trip verified: PUT 5000 → stored as 625000 bytes/s → GET returns 5000.",
+    "flussonic.py:317-331 — update_stream() builds merged body from config_on_disk first and only overlays incoming keys. This is the right pattern; preserves all unrelated fields (publish_password etc.) on partial PUTs.",
+    "flussonic.py:660-688 — stream_outputs publish[0]: url='rtmp://HOST/static/NAME', server='rtmp://HOST/static/', stream_key='NAME'. Verified live on oniptv.pro / Tudn. /static/ correctly inserted.",
+    "Layout pill / sidebar — derives 'connected' boolean from streams list rather than a demo flag (per spec). Verified renders 'Live · connected · 11/23 streams · 76 viewers' on the live server.",
+    "StreamWizard.jsx — 'Limits & timeouts · optional' section + collapsible <details> with summary 'Server-wide limits (max sessions, client timeout) →' and the conf-edit explanation. Defaults are exactly 0 and 60 as required.",
+    "Two cosmetic 'Demo' word leftovers remain (Login credential hint + Settings DEMO fallback label). Neither is a feature toggle; both safe to leave but should be cleaned for full consistency."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_streams_limits_and_rtmp.py"
+  ],
+  "success_rate": {"backend": "100% (8/8 iter7 tests pass standalone)", "frontend": "100% (17/17 UI assertions across 2 browser runs)"},
+  "test_credentials": "admin@flussonic.io / admin123",
+  "seed_data_creation": "Modified Tudn temporarily (max_bitrate_kbps 5000→3000→0, source_timeout 45→30→60) and RESTORED to defaults (0 / 60) at end. Verified post-cleanup GET returns max_bitrate_kbps=0, source_timeout=60. No other streams touched.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "iter7 test file lives at /app/backend/tests/test_streams_limits_and_rtmp.py and is the regression suite for: demo_mode removal, /static/ RTMP path, and max_bitrate_kbps/source_timeout per-stream fields. Run it standalone (do NOT run with full pytest suite — pre-existing cross-test interference unrelated to this iteration). UI tests confirmed wizard fields and collapsible explanation render correctly. Two cosmetic leftover 'Demo' word occurrences remain (Login hint, Settings live/demo badge) — main agent's call whether to clean those up.",
+  "rca of the issue": "N/A — no new bug; all features implemented correctly. The two minor 'Demo' text leftovers are cosmetic and outside the data-testid contract specified by the request."
+}

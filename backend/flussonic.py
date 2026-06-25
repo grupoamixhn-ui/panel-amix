@@ -45,12 +45,10 @@ async def _active_config() -> dict[str, Any]:
         doc = await _DB.config.find_one({"_id": "flussonic"})
         if doc:
             cfg = doc
-    env_demo = os.environ.get("DEMO_MODE", "true").lower() == "true"
     return {
         "url": (cfg.get("url") or os.environ.get("FLUSSONIC_URL", "")).strip(),
         "user": cfg.get("user", os.environ.get("FLUSSONIC_USER", "")),
         "password": cfg.get("password", os.environ.get("FLUSSONIC_PASS", "")),
-        "demo_mode": cfg["demo_mode"] if "demo_mode" in cfg else env_demo,
         "api_path": (cfg.get("api_path") or os.environ.get("FLUSSONIC_API_PATH") or "/streamer/api/v3").rstrip("/"),
         "public_host": (cfg.get("public_host") or "").strip(),
         "srt_port": int(cfg.get("srt_port") or 9998),
@@ -65,7 +63,6 @@ async def get_public_config() -> dict[str, Any]:
     return {
         "url": c["url"],
         "user": c["user"],
-        "demo_mode": c["demo_mode"],
         "has_password": bool(c["password"]),
         "api_path": c["api_path"],
         "public_host": c["public_host"],
@@ -76,7 +73,7 @@ async def get_public_config() -> dict[str, Any]:
 
 
 async def save_config(
-    *, url: str, user: str, password: str | None, demo_mode: bool,
+    *, url: str, user: str, password: str | None,
     api_path: str | None = None, public_host: str | None = None,
     srt_port: int | None = None, rtmp_port: int | None = None,
     https: bool | None = None,
@@ -86,7 +83,6 @@ async def save_config(
     update: dict[str, Any] = {
         "url": (url or "").strip(),
         "user": user or "",
-        "demo_mode": bool(demo_mode),
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
     if api_path is not None:
@@ -118,11 +114,6 @@ def _make_client(cfg: dict[str, Any]) -> httpx.AsyncClient:
     base = cfg["url"].rstrip("/")
     auth = (cfg["user"], cfg["password"]) if cfg.get("user") else None
     return httpx.AsyncClient(base_url=base, auth=auth, timeout=10.0)
-
-
-async def _is_demo() -> bool:
-    cfg = await _active_config()
-    return bool(cfg["demo_mode"]) or not cfg["url"]
 
 
 async def test_connection(*, url: str, user: str, password: str, api_path: str | None = None) -> dict[str, Any]:
@@ -162,69 +153,12 @@ async def test_connection(*, url: str, user: str, password: str, api_path: str |
     }
 
 
-# ---------- Mock data ----------
-_MOCK_STREAMS: dict[str, dict[str, Any]] = {}
-_MOCK_LOGS: list[dict[str, Any]] = []
 _BOOTED_AT = time.time()
 
 
-def _seed_mock() -> None:
-    if _MOCK_STREAMS:
-        return
-    samples = [
-        ("cam_lobby", "rtsp://192.168.1.21/live", "running", 4_512_000, 124),
-        ("cam_parking", "rtsp://192.168.1.22/live", "running", 2_180_000, 38),
-        ("news_hd", "udp://239.0.0.10:1234", "running", 8_900_000, 1532),
-        ("sports_ch", "udp://239.0.0.11:1234", "running", 7_120_000, 980),
-        ("movies_hd", "file:///storage/movies/loop.mp4", "running", 5_400_000, 412),
-        ("backup_feed", "rtmp://ingest.example.com/live/key", "stopped", 0, 0),
-        ("studio_a", "srt://ingest.example.com:9000", "running", 6_300_000, 211),
-        ("dvr_archive", "file:///storage/archive/01.mp4", "error", 0, 0),
-    ]
-    for name, src, status, bitrate, clients in samples:
-        _MOCK_STREAMS[name] = {
-            "name": name,
-            "title": name.replace("_", " ").title(),
-            "inputs": [{"url": src}],
-            "status": status,
-            "alive": status == "running",
-            "bitrate": bitrate,
-            "clients": clients,
-            "uptime": random.randint(120, 86400) if status == "running" else 0,
-            "created_at": (datetime.now(timezone.utc) - timedelta(days=random.randint(1, 90))).isoformat(),
-        }
-    levels = ["info", "warn", "error", "info", "info", "debug"]
-    msgs = [
-        "Stream {n} started",
-        "Client connected to {n} from 203.0.113.{ip}",
-        "DVR segment written for {n}",
-        "Source reconnect attempt on {n}",
-        "Auth challenge failed for {n}",
-        "Bitrate spike detected on {n} ({br} kbps)",
-        "Session closed on {n}",
-    ]
-    now = datetime.now(timezone.utc)
-    for i in range(40):
-        n = random.choice(list(_MOCK_STREAMS.keys()))
-        msg = random.choice(msgs).format(n=n, ip=random.randint(1, 250), br=random.randint(1000, 9000))
-        _MOCK_LOGS.append({
-            "ts": (now - timedelta(seconds=i * 17)).isoformat(),
-            "level": random.choice(levels),
-            "source": "flussonic",
-            "stream": n,
-            "message": msg,
-        })
-
-
 def _log(level: str, message: str, stream: str | None = None) -> None:
-    _MOCK_LOGS.insert(0, {
-        "ts": datetime.now(timezone.utc).isoformat(),
-        "level": level,
-        "source": "panel",
-        "stream": stream or "-",
-        "message": message,
-    })
-    del _MOCK_LOGS[500:]
+    """No-op (logging is now done by the standard logger in server.py)."""
+    return
 
 
 # ---------- Real-mode helpers ----------
@@ -268,6 +202,12 @@ def _normalize_stream(name: str, data: dict[str, Any]) -> dict[str, Any]:
             uptime = max(0, int(_t.time() - stats["opened_at"] / 1000))
         else:
             uptime = int(stats.get("uptime") or data.get("uptime") or 0)
+    # Flussonic max_bitrate is in bytes/s; expose as kbps to the UI
+    raw_max_bitrate = data.get("max_bitrate") or 0
+    try:
+        max_bitrate_kbps = int(int(raw_max_bitrate) * 8 / 1000) if raw_max_bitrate else 0
+    except (TypeError, ValueError):
+        max_bitrate_kbps = 0
     return {
         "name": name,
         "title": data.get("title") or data.get("name") or name,
@@ -279,24 +219,13 @@ def _normalize_stream(name: str, data: dict[str, Any]) -> dict[str, Any]:
         "uptime": int(uptime),
         "created_at": data.get("created_at") or "",
         "publish_password": data.get("password") or data.get("publish_password") or "",
+        "max_bitrate_kbps": max_bitrate_kbps,
+        "source_timeout": int(data.get("source_timeout") or 0),
     }
 
 
 # ---------- Public API ----------
 async def get_server_info() -> dict[str, Any]:
-    if await _is_demo():
-        _seed_mock()
-        total = len(_MOCK_STREAMS)
-        live = sum(1 for s in _MOCK_STREAMS.values() if s["alive"])
-        clients = sum(s["clients"] for s in _MOCK_STREAMS.values())
-        bw = sum(s["bitrate"] for s in _MOCK_STREAMS.values())
-        return {
-            "version": "demo-24.03", "uptime": int(time.time() - _BOOTED_AT), "mode": "demo",
-            "streams_total": total, "streams_live": live, "clients": clients,
-            "bandwidth_bps": bw,
-            "cpu": round(20 + random.random() * 30, 1),
-            "memory": round(35 + random.random() * 20, 1),
-        }
     cfg = await _active_config()
     async with _make_client(cfg) as c:
         # /server is the only call here that can return early — fall through if it fails so the
@@ -337,13 +266,6 @@ async def get_server_info() -> dict[str, Any]:
 
 
 async def list_streams() -> list[dict[str, Any]]:
-    if await _is_demo():
-        _seed_mock()
-        for s in _MOCK_STREAMS.values():
-            if s["alive"]:
-                s["bitrate"] = max(500_000, s["bitrate"] + random.randint(-50_000, 50_000))
-                s["clients"] = max(0, s["clients"] + random.randint(-3, 3))
-        return list(_MOCK_STREAMS.values())
     cfg = await _active_config()
     async with _make_client(cfg) as c:
         r = await c.get(f"{cfg['api_path']}/streams")
@@ -355,9 +277,6 @@ async def list_streams() -> list[dict[str, Any]]:
 
 
 async def get_stream(name: str) -> dict[str, Any] | None:
-    if await _is_demo():
-        _seed_mock()
-        return _MOCK_STREAMS.get(name)
     cfg = await _active_config()
     async with _make_client(cfg) as c:
         r = await c.get(f"{cfg['api_path']}/streams/{name}")
@@ -367,44 +286,26 @@ async def get_stream(name: str) -> dict[str, Any] | None:
         return _normalize_stream(name, r.json())
 
 
-async def create_stream(name: str, url: str, title: str = "", publish_password: str | None = None) -> dict[str, Any]:
-    if await _is_demo():
-        _seed_mock()
-        if name in _MOCK_STREAMS:
-            raise ValueError("stream already exists")
-        _MOCK_STREAMS[name] = {
-            "name": name, "title": title or name, "inputs": [{"url": url}],
-            "status": "running", "alive": True,
-            "bitrate": random.randint(2_000_000, 6_000_000), "clients": 0, "uptime": 0,
-            "created_at": datetime.now(timezone.utc).isoformat(),
-            "publish_password": publish_password or "",
-        }
-        _log("info", f"Stream {name} created", name)
-        return _MOCK_STREAMS[name]
+async def create_stream(
+    name: str, url: str, title: str = "", publish_password: str | None = None,
+    *, max_bitrate_kbps: int | None = None, source_timeout: int | None = None,
+) -> dict[str, Any]:
     cfg = await _active_config()
     async with _make_client(cfg) as c:
         body: dict[str, Any] = {"name": name, "inputs": [{"url": url}], "title": title}
         if publish_password:
             body["password"] = publish_password
+        # Flussonic max_bitrate is in bytes/sec, our API takes kbps
+        if max_bitrate_kbps is not None:
+            body["max_bitrate"] = int(max_bitrate_kbps) * 1000 // 8 if max_bitrate_kbps > 0 else 0
+        if source_timeout is not None:
+            body["source_timeout"] = int(source_timeout)
         r = await c.put(f"{cfg['api_path']}/streams/{name}", json=body)
         r.raise_for_status()
         return _normalize_stream(name, r.json() if r.content else body)
 
 
 async def update_stream(name: str, payload: dict[str, Any]) -> dict[str, Any] | None:
-    if await _is_demo():
-        _seed_mock()
-        s = _MOCK_STREAMS.get(name)
-        if not s:
-            return None
-        if "url" in payload and payload["url"]:
-            s["inputs"] = [{"url": payload["url"]}]
-        if "title" in payload:
-            s["title"] = payload["title"]
-        if "publish_password" in payload:
-            s["publish_password"] = payload["publish_password"] or ""
-        _log("info", f"Stream {name} updated", name)
-        return s
     cfg = await _active_config()
     async with _make_client(cfg) as c:
         # Flussonic v3 PUT replaces the full stream config. Fetch current, merge, re-PUT.
@@ -423,6 +324,11 @@ async def update_stream(name: str, payload: dict[str, Any]) -> dict[str, Any] | 
         if "publish_password" in payload:
             # Flussonic only clears the password when an explicit empty string is sent.
             merged["password"] = payload["publish_password"] or ""
+        if "max_bitrate_kbps" in payload:
+            kbps = payload["max_bitrate_kbps"]
+            merged["max_bitrate"] = (int(kbps) * 1000 // 8) if kbps and int(kbps) > 0 else 0
+        if "source_timeout" in payload:
+            merged["source_timeout"] = int(payload["source_timeout"] or 0)
         r = await c.put(f"{cfg['api_path']}/streams/{name}", json=merged)
         r.raise_for_status()
         try:
@@ -432,13 +338,6 @@ async def update_stream(name: str, payload: dict[str, Any]) -> dict[str, Any] | 
 
 
 async def delete_stream(name: str) -> bool:
-    if await _is_demo():
-        _seed_mock()
-        if name in _MOCK_STREAMS:
-            del _MOCK_STREAMS[name]
-            _log("warn", f"Stream {name} deleted", name)
-            return True
-        return False
     cfg = await _active_config()
     async with _make_client(cfg) as c:
         r = await c.delete(f"{cfg['api_path']}/streams/{name}")
@@ -446,17 +345,6 @@ async def delete_stream(name: str) -> bool:
 
 
 async def toggle_stream(name: str, start: bool) -> dict[str, Any] | None:
-    if await _is_demo():
-        _seed_mock()
-        s = _MOCK_STREAMS.get(name)
-        if not s:
-            return None
-        s["alive"] = start
-        s["status"] = "running" if start else "stopped"
-        s["bitrate"] = random.randint(2_000_000, 6_000_000) if start else 0
-        s["clients"] = 0 if not start else s["clients"]
-        _log("info", f"Stream {name} {'started' if start else 'stopped'}", name)
-        return s
     cfg = await _active_config()
     async with _make_client(cfg) as c:
         # Flussonic 24.02 exposes only GET/PUT/DELETE on the streams resource — no
@@ -477,17 +365,6 @@ async def toggle_stream(name: str, start: bool) -> dict[str, Any] | None:
 async def reset_stream(name: str) -> dict[str, Any] | None:
     """Restart a stream by toggling ``disabled`` off→on. Kicks current viewers
     and forces Flussonic to reconnect to the source."""
-    if await _is_demo():
-        _seed_mock()
-        s = _MOCK_STREAMS.get(name)
-        if not s:
-            return None
-        s["alive"] = True
-        s["status"] = "running"
-        s["bitrate"] = random.randint(2_000_000, 6_000_000)
-        s["clients"] = 0
-        _log("info", f"Stream {name} reset", name)
-        return s
     cfg = await _active_config()
     async with _make_client(cfg) as c:
         g = await c.get(f"{cfg['api_path']}/streams/{name}")
@@ -515,29 +392,6 @@ async def reset_stream(name: str) -> dict[str, Any] | None:
 
 
 async def list_sessions() -> list[dict[str, Any]]:
-    if await _is_demo():
-        _seed_mock()
-        sessions: list[dict[str, Any]] = []
-        sid = 1
-        protocols = ["hls", "dash", "rtmp", "webrtc", "rtsp"]
-        countries = ["US", "BR", "DE", "IN", "ES", "JP", "GB", "FR"]
-        now = datetime.now(timezone.utc)
-        for s in _MOCK_STREAMS.values():
-            if not s["alive"]:
-                continue
-            for _ in range(min(s["clients"], 12)):
-                sessions.append({
-                    "id": f"sess-{sid:05d}", "stream": s["name"], "type": "play",
-                    "protocol": random.choice(protocols),
-                    "ip": f"203.0.113.{random.randint(1,254)}",
-                    "country": random.choice(countries),
-                    "user_agent": random.choice(["VLC/3.0", "Chrome/120", "Safari/17", "ExoPlayer/2"]),
-                    "bytes": random.randint(1_000_000, 500_000_000),
-                    "started_at": (now - timedelta(seconds=random.randint(30, 7200))).isoformat(),
-                    "bitrate": random.randint(800_000, 6_000_000),
-                })
-                sid += 1
-        return sessions
     cfg = await _active_config()
     async with _make_client(cfg) as c:
         r = await c.get(f"{cfg['api_path']}/sessions")
@@ -579,20 +433,6 @@ async def list_sessions_for_stream(name: str) -> list[dict[str, Any]]:
 
 
 async def get_stats_timeseries(points: int = 30) -> dict[str, Any]:
-    if await _is_demo():
-        _seed_mock()
-        now = datetime.now(timezone.utc)
-        series = []
-        base_clients = sum(s["clients"] for s in _MOCK_STREAMS.values())
-        base_bw = sum(s["bitrate"] for s in _MOCK_STREAMS.values())
-        for i in range(points, 0, -1):
-            ts = now - timedelta(minutes=i)
-            series.append({
-                "ts": ts.isoformat(),
-                "clients": max(0, base_clients + random.randint(-20, 20)),
-                "bandwidth": max(0, base_bw + random.randint(-800_000, 800_000)),
-            })
-        return {"series": series}
     info = await get_server_info()
     now = datetime.now(timezone.utc)
     series = [{
@@ -610,25 +450,6 @@ async def get_monitor_metrics() -> dict[str, Any]:
     reachable; otherwise ``cpu_ram_available=False`` so the UI can show a
     helpful notice and keep the bandwidth/viewer graphs working.
     """
-    if await _is_demo():
-        _seed_mock()
-        bw_in = sum(s["bitrate"] for s in _MOCK_STREAMS.values())
-        bw_out = int(bw_in * (1.4 + random.random() * 0.5))
-        clients = sum(s["clients"] for s in _MOCK_STREAMS.values())
-        live = sum(1 for s in _MOCK_STREAMS.values() if s["alive"])
-        return {
-            "ts": datetime.now(timezone.utc).isoformat(),
-            "cpu": round(20 + random.random() * 40, 1),
-            "memory": round(35 + random.random() * 25, 1),
-            "bandwidth_in_bps": bw_in,
-            "bandwidth_out_bps": bw_out,
-            "clients": clients,
-            "streams_live": live,
-            "streams_total": len(_MOCK_STREAMS),
-            "cpu_ram_available": True,
-            "source_warning": "",
-            "mode": "demo",
-        }
 
     cfg = await _active_config()
     cpu = 0.0
@@ -753,9 +574,6 @@ async def get_monitor_metrics() -> dict[str, Any]:
 
 
 async def list_logs(limit: int = 100) -> list[dict[str, Any]]:
-    if await _is_demo():
-        _seed_mock()
-        return _MOCK_LOGS[:limit]
     return []
 
 
@@ -853,9 +671,9 @@ async def stream_outputs(name: str) -> dict[str, Any]:
             {
                 "label": "RTMP publish (OBS / encoder)",
                 "protocol": "rtmp",
-                "url": f"rtmp://{rtmp_host}/{name}{pw_q}",
+                "url": f"rtmp://{rtmp_host}/static/{name}{pw_q}",
                 "key": f"{name}{pw_q}",
-                "server": f"rtmp://{rtmp_host}/",
+                "server": f"rtmp://{rtmp_host}/static/",
                 "stream_key": f"{name}{pw_q}",
             },
             {
