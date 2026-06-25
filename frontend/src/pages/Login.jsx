@@ -79,10 +79,6 @@ export default function Login() {
           >
             {busy ? "Authenticating…" : (<>Sign in <ArrowRight className="w-4 h-4" /></>)}
           </button>
-
-          <div className="mt-10 pt-5 border-t border-[var(--border)] text-xs text-[var(--muted)] mono">
-            Default · admin@flussonic.io / admin123
-          </div>
         </form>
       </div>
 
@@ -90,33 +86,8 @@ export default function Login() {
         <img
           src="https://images.pexels.com/photos/17323801/pexels-photo-17323801.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=900&w=1200"
           alt=""
-          className="absolute inset-0 w-full h-full object-cover opacity-40"
+          className="absolute inset-0 w-full h-full object-cover"
         />
-        <div className="absolute inset-0 bg-gradient-to-br from-[#0B0F19]/95 via-[#0B0F19]/60 to-transparent" />
-        <div className="relative z-10 flex flex-col justify-between p-14 w-full text-white">
-          <div className="flex items-center gap-2 mono text-xs tracking-[0.25em] text-white/70">
-            <span className="dot dot-live" /> v24.03 · STREAMER API
-          </div>
-
-          <div>
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur text-[11px] mono uppercase tracking-wider mb-6">
-              Control Console
-            </div>
-            <h1 className="text-5xl font-semibold leading-[1.05] tracking-tight">
-              Stream operations,<br/>
-              <span className="bg-gradient-to-r from-blue-300 to-cyan-200 bg-clip-text text-transparent">orchestrated precisely.</span>
-            </h1>
-            <p className="mt-6 text-white/70 max-w-md text-sm leading-relaxed">
-              Real-time visibility into every stream, session, byte and event flowing through your {displayBrand} Media Server.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-3 gap-6 mono text-xs">
-            <div><div className="text-[10px] uppercase tracking-widest text-white/50">Region</div><div className="mt-1.5">us-east-1</div></div>
-            <div><div className="text-[10px] uppercase tracking-widest text-white/50">API</div><div className="mt-1.5">v3.admin</div></div>
-            <div><div className="text-[10px] uppercase tracking-widest text-white/50">Build</div><div className="mt-1.5">24.03</div></div>
-          </div>
-        </div>
       </div>
     </div>
   );
