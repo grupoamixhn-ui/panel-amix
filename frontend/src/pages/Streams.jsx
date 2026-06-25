@@ -4,7 +4,8 @@ import PageHeader from "../components/PageHeader";
 import StreamWizard from "../components/StreamWizard";
 import OutputsModal from "../components/OutputsModal";
 import StreamClientsModal from "../components/StreamClientsModal";
-import { Plus, Play, Pause, Trash2, Share2, Search, Pencil, Users, RotateCw } from "lucide-react";
+import StreamLiveMonitor from "../components/StreamLiveMonitor";
+import { Plus, Play, Pause, Trash2, Share2, Search, Pencil, Users, RotateCw, Activity } from "lucide-react";
 
 function statusPill(s) {
   if (s.alive) return <span className="pill pill-live"><span className="dot dot-live" />Live</span>;

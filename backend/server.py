@@ -476,6 +476,17 @@ async def streams_outputs(name: str, user=Depends(get_current_user)):
     return await flussonic.stream_outputs(name)
 
 
+@api.get("/streams/{name}/live-stats")
+async def streams_live_stats(name: str, user=Depends(get_current_user)):
+    pool = await effective_streams(user)
+    if pool is not None and name not in pool:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    data = await flussonic.get_stream_live_stats(name)
+    if not data:
+        raise HTTPException(status_code=404, detail="Stream not found")
+    return data
+
+
 @api.get("/streams/{name}/sessions")
 async def streams_sessions(name: str, user=Depends(get_current_user)):
     return await flussonic.list_sessions_for_stream(name)

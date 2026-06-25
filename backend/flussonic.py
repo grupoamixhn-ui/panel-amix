@@ -583,6 +583,66 @@ async def list_logs(limit: int = 100) -> list[dict[str, Any]]:
     return []
 
 
+async def get_stream_live_stats(name: str) -> dict[str, Any] | None:
+    """Per-stream live snapshot used by the in-app Stream monitor: codec info,
+    real-time bitrate, in/out bandwidth, viewers and uptime."""
+    cfg = await _active_config()
+    if not cfg["url"]:
+        return None
+    async with _make_client(cfg) as c:
+        try:
+            r = await c.get(f"{cfg['api_path']}/streams/{name}?stats=true")
+        except httpx.HTTPError:
+            return None
+        if r.status_code >= 400:
+            return None
+        d = r.json() or {}
+
+    stats = d.get("stats") or {}
+    media = stats.get("media_info") or {}
+    tracks = media.get("tracks") or []
+    video: dict[str, Any] = {}
+    audio: dict[str, Any] = {}
+    for t in tracks:
+        if t.get("content") == "video" and not video:
+            video = {
+                "codec": t.get("codec") or "",
+                "profile": t.get("profile") or "",
+                "level": t.get("level") or "",
+                "width": t.get("width") or 0,
+                "height": t.get("height") or 0,
+                "fps": t.get("avg_fps") or t.get("fps") or 0,
+                "bitrate_kbps": int(t.get("bitrate") or 0),
+                "pix_fmt": t.get("pix_fmt") or "",
+            }
+        elif t.get("content") == "audio" and not audio:
+            audio = {
+                "codec": t.get("codec") or "",
+                "channels": t.get("channels") or 0,
+                "sample_rate": t.get("sample_rate") or 0,
+                "bitrate_kbps": int(t.get("bitrate") or 0),
+            }
+
+    return {
+        "ts": datetime.now(timezone.utc).isoformat(),
+        "name": name,
+        "alive": bool(stats.get("alive")),
+        "status": stats.get("status") or "",
+        "uptime_s": int(stats.get("uptime") or 0),
+        "clients": int(stats.get("client_count") or 0),
+        # Flussonic input_bitrate is already in kbit/s
+        "input_bitrate_kbps": int(stats.get("input_bitrate") or 0),
+        # out_bandwidth appears in bps; coerce to bps for the UI
+        "output_bandwidth_bps": int(stats.get("out_bandwidth") or 0),
+        "bytes_in": int(stats.get("bytes_in") or 0),
+        "bytes_out": int(stats.get("bytes_out") or 0),
+        "video": video,
+        "audio": audio,
+        "publisher_ip": stats.get("published_from") or "",
+        "publisher_proto": (stats.get("published_via") or "").lower(),
+    }
+
+
 async def get_server_limits() -> dict[str, Any]:
     """Return server-wide limits that are editable via the Flussonic /config endpoint."""
     cfg = await _active_config()
