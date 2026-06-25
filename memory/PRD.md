@@ -53,6 +53,7 @@ User wants a web admin panel for the Flussonic Media Server API. Confirmed via c
 - ✅ Installer distribution via the deployed panel: 3 new endpoints (`GET /api/download/installer/info` public metadata + curl one-liner, `GET /api/download/installer` public tarball download, `POST /api/download/installer/rebuild` admin-only). Tarball built on-demand from `make-release.sh`, cached in `/app/dist/`. New "Self-hosted installer" card in Settings with Download button + copy-paste curl one-liner + SHA-256 + rebuild button (2026-06-24)
 - ✅ CPU/RAM monitor now reads from `/streamer/api/v3/config` (was 404 on `/server`); brand color picker + "Use logo colors" auto-extract in Branding settings; admin role can now create other admin users via /sub-users (2026-06-24)
 - ✅ Demo mode REMOVED entirely (backend + frontend); RTMP publish URL now uses Flussonic `/static/` application path; per-stream `max_bitrate_kbps` and `source_timeout` fields added to Stream wizard with server-wide max_sessions/client_timeout disclaimer (2026-06-24)
+- ✅ Server-wide limits card in Settings (GET/PUT `/api/server/limits`): editable `max_sessions` (pushed to Flussonic via PUT /config root level, admin-only) + read-only `client_timeout=60` with copyable `/etc/flussonic/flussonic.conf` snippet. Default set to 400 per user request (2026-06-24)
 
 ## Prioritized Backlog
 **P1 (post-MVP polish)**
