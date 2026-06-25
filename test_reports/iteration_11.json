@@ -1,0 +1,27 @@
+{
+  "summary": "Iteration 11 — Verified TWO features end-to-end: (1) Publisher info (IP + protocol) surfaced on Streams Source column for active publish:// streams; (2) RTMP pull URL in Outputs modal now includes /static/. Backend: 14/14 new tests in /app/backend/tests/test_publisher_info_and_static_rtmp.py PASS — all 23 streams returned by GET /api/streams expose publisher_ip + publisher_proto string fields; publisher_proto is lowercase ('rtmp'/'srt'/''); ≥5 streams currently have an active publisher (Telenerema=srt/200.115.96.62, Vfstv=rtmp/190.97.183.28, SanJorgeTv=srt/63.245.10.228, Canal5Lider=srt/45.182.23.133, DeportesTVC=srt/45.182.23.133); idle publish streams (QhuboTv, SkySportsLiga, CanalDeLaStrella, Nextecatv) have publisher_ip='' and publisher_proto=''; GET /api/streams/Telenerema/outputs RTMP pull URL = 'rtmp://oniptv.pro/static/Telenerema' (NEW fix); RTMP publish URL = 'rtmp://oniptv.pro/static/Telenerema' (regression OK); HLS / HLS-LL / SRT unchanged; outputs order ['HLS (.m3u8)','HLS Low-Latency','RTMP pull','SRT pull'] preserved. Regression: 15/15 prior tests in /app/backend/tests/test_streams_limits_and_rtmp.py still PASS. Frontend: Playwright login as admin@flussonic.io → navigate /streams → 'Source' column rendered correctly: purple 'SRT' badge + IP for srt publishers (Telenerema, SanJorgeTv, Canal5Lider, DeportesTVC), orange 'RTMP' badge + IP for Vfstv, italicized 'publish:// (no publisher connected)' for idle publish streams (QhuboTv), raw input URL for non-publish HLS streams (Tudn, SuyapaTv). Clicked [data-testid='stream-outputs-Telenerema'] → outputs-modal opened → RTMP pull row shows 'rtmp://oniptv.pro/static/Telenerema' with the /static/ segment present; no bare 'rtmp://oniptv.pro/{name}' URL appears anywhere in the modal.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_publisher_info_and_static_rtmp.py",
+    "/app/backend/tests/test_streams_limits_and_rtmp.py",
+    "/app/test_reports/pytest/iter11_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "flussonic.py _normalize_stream (lines 211-214) — publisher_ip and publisher_proto are read from stats.published_from / stats.published_via and exposed as additive fields; empty-string defaults keep the contract typed (always str). publisher_proto is lowercased here so the frontend doesn't have to depend on Flussonic's casing. Clean.",
+    "flussonic.py stream_outputs (line 706) — RTMP pull URL constructed as rtmp://{rtmp_host}/static/{name}, matching the publish URL on line 713. Single source of truth for the /static/ application prefix; future port changes will work via the rtmp_host computation on line 689.",
+    "Streams.jsx (lines 125-146) — Source td renders three distinct states correctly: (a) publish:// + IP → badge + IP, (b) publish:// alone → italicized empty-state, (c) non-publish → raw URL. Badge classes use a small lookup map (orange/purple/slate) which is readable; consider extracting a tiny <PublisherBadge proto ip /> helper if more states are added later (HEVC/WHIP etc.), but for 2 protocols this inline IIFE is fine.",
+    "publisher_proto is normalized to lowercase server-side AND uppercased client-side — agrees with the spec; just be aware: if Flussonic ever returns 'srtv2' or similar, the badge falls through to slate ('PUSH' label) which is a reasonable graceful-degrade.",
+    "Regression risk on stream_outputs change: the RTMP pull URL changing from rtmp://host/{name} to rtmp://host/static/{name} is a contract change for any external consumer that copied the old URL. The publish URL was always /static/, so this is now consistent. Low risk in this app since URLs are read-only display.",
+    "data-testid coverage for the new feature is good — stream-source-{name} per row + outputs-modal on the modal. The badge span itself doesn't have a testid but assertions on the cell's text + badge classes were sufficient."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (14/14 new + 15/15 regression)", "frontend": "100% (source column states + RTMP pull /static/ verified visually)"},
+  "test_credentials": "admin@flussonic.io / admin123",
+  "seed_data_creation": "None — read-only verification against live Flussonic at oniptv.pro.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Both items PASS end-to-end. To rerun: REACT_APP_BACKEND_URL=https://flussonic-control.preview.emergentagent.com pytest /app/backend/tests/test_publisher_info_and_static_rtmp.py /app/backend/tests/test_streams_limits_and_rtmp.py -v. UI flow: login → /streams → inspect [data-testid='stream-source-{Telenerema|Vfstv|...}'] for badge+IP; click [data-testid='stream-outputs-Telenerema'] → assert outputs-modal contains 'rtmp://oniptv.pro/static/Telenerema' AND that no bare 'rtmp://oniptv.pro/Telenerema' (without /static/) appears anywhere. The set of currently-publishing streams may shift over time — tests use pytest.skip when Telenerema/Vfstv have empty publisher_ip rather than failing, so suite remains green during publisher dropouts.",
+  "rca of the issue": "N/A — both features correctly implemented by main agent. Verification only."
+}

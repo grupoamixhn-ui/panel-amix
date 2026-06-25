@@ -208,6 +208,10 @@ def _normalize_stream(name: str, data: dict[str, Any]) -> dict[str, Any]:
         max_bitrate_kbps = int(raw_max_bitrate) // 1000 if raw_max_bitrate else 0
     except (TypeError, ValueError):
         max_bitrate_kbps = 0
+    # Publisher info (IP + protocol) — only meaningful when input is publish://
+    publish_stats = data.get("stats") or {}
+    publisher_ip = publish_stats.get("published_from") or ""
+    publisher_proto = (publish_stats.get("published_via") or "").lower()
     return {
         "name": name,
         "title": data.get("title") or data.get("name") or name,
@@ -221,6 +225,8 @@ def _normalize_stream(name: str, data: dict[str, Any]) -> dict[str, Any]:
         "publish_password": data.get("password") or data.get("publish_password") or "",
         "max_bitrate_kbps": max_bitrate_kbps,
         "source_timeout": int(data.get("source_timeout") or 0),
+        "publisher_ip": publisher_ip,
+        "publisher_proto": publisher_proto,
     }
 
 
@@ -697,7 +703,7 @@ async def stream_outputs(name: str) -> dict[str, Any]:
         "outputs": [
             {"label": "HLS (.m3u8)", "protocol": "hls", "url": f"{scheme}://{host}/{name}/index.m3u8"},
             {"label": "HLS Low-Latency", "protocol": "hls", "url": f"{scheme}://{host}/{name}/index_ll.m3u8"},
-            {"label": "RTMP pull", "protocol": "rtmp", "url": f"rtmp://{rtmp_host}/{name}"},
+            {"label": "RTMP pull", "protocol": "rtmp", "url": f"rtmp://{rtmp_host}/static/{name}"},
             {"label": "SRT pull", "protocol": "srt", "url": f"srt://{host}:{srt_p}?streamid={name}"},
         ],
         "publish": [

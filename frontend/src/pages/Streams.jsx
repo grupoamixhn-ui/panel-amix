@@ -122,7 +122,28 @@ export default function Streams() {
                       </button>
                       {s.title && <div className="text-xs text-[var(--muted)]">{s.title}</div>}
                     </td>
-                    <td className="px-5 py-3.5 mono text-xs text-[var(--muted)] max-w-xs truncate">{s.inputs?.[0]?.url}</td>
+                    <td className="px-5 py-3.5 mono text-xs text-[var(--muted)] max-w-xs truncate" data-testid={`stream-source-${s.name}`}>
+                      {(() => {
+                        const url = s.inputs?.[0]?.url || "";
+                        const isPublish = url.startsWith("publish://");
+                        if (isPublish && s.publisher_ip) {
+                          const proto = (s.publisher_proto || "").toUpperCase();
+                          const badgeColor = proto === "RTMP" ? "bg-orange-50 text-orange-700 border-orange-200"
+                            : proto === "SRT" ? "bg-purple-50 text-purple-700 border-purple-200"
+                            : "bg-slate-50 text-slate-700 border-slate-200";
+                          return (
+                            <span className="flex items-center gap-1.5">
+                              <span className={`inline-block text-[9px] px-1.5 py-0.5 rounded border font-semibold tracking-wider ${badgeColor}`}>{proto || "PUSH"}</span>
+                              <span className="text-[var(--text-2)]" title={`Publisher IP: ${s.publisher_ip}`}>{s.publisher_ip}</span>
+                            </span>
+                          );
+                        }
+                        if (isPublish) {
+                          return <span className="italic text-[var(--muted)]">publish:// <span className="text-[10px]">(no publisher connected)</span></span>;
+                        }
+                        return url;
+                      })()}
+                    </td>
                     <td className="px-5 py-3.5 mono font-semibold">
                       {s.clients > 0 ? (
                         <button
