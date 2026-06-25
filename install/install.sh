@@ -215,6 +215,13 @@ ok "frontend bundle in $APP_DIR/frontend/build"
 
 # ---------- secrets + .env ----------------------------------------------------
 title "8/8  Configuring services"
+
+# Define SSL paths up-front so the backend .env can reference them even when
+# --no-ssl was passed (paths are still written; only used by Nginx when USE_SSL=1).
+SSL_CERT_DIR="/etc/flussonic-admin/ssl"
+SSL_CERT="$SSL_CERT_DIR/cert.pem"
+SSL_KEY="$SSL_CERT_DIR/key.pem"
+
 ENV_FILE="$APP_DIR/backend/.env"
 if [[ -f "$ENV_FILE" ]] && grep -q "^JWT_SECRET=" "$ENV_FILE"; then
   # Preserve existing config (idempotent re-run / upgrade)
@@ -285,10 +292,6 @@ fi
 ok "backend service running on 127.0.0.1:8001"
 
 # ---------- self-signed certificate (when no domain provided) -----------------
-SSL_CERT_DIR="/etc/flussonic-admin/ssl"
-SSL_CERT="$SSL_CERT_DIR/cert.pem"
-SSL_KEY="$SSL_CERT_DIR/key.pem"
-
 if [[ "$USE_SSL" == "1" ]]; then
   mkdir -p "$SSL_CERT_DIR"
   if [[ ! -f "$SSL_CERT" || ! -f "$SSL_KEY" ]]; then
