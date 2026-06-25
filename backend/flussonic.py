@@ -202,10 +202,10 @@ def _normalize_stream(name: str, data: dict[str, Any]) -> dict[str, Any]:
             uptime = max(0, int(_t.time() - stats["opened_at"] / 1000))
         else:
             uptime = int(stats.get("uptime") or data.get("uptime") or 0)
-    # Flussonic max_bitrate is in bytes/s; expose as kbps to the UI
+    # Flussonic max_bitrate is in bits/second; expose as kbit/s to the UI
     raw_max_bitrate = data.get("max_bitrate") or 0
     try:
-        max_bitrate_kbps = int(int(raw_max_bitrate) * 8 / 1000) if raw_max_bitrate else 0
+        max_bitrate_kbps = int(raw_max_bitrate) // 1000 if raw_max_bitrate else 0
     except (TypeError, ValueError):
         max_bitrate_kbps = 0
     return {
@@ -295,9 +295,9 @@ async def create_stream(
         body: dict[str, Any] = {"name": name, "inputs": [{"url": url}], "title": title}
         if publish_password:
             body["password"] = publish_password
-        # Flussonic max_bitrate is in bytes/sec, our API takes kbps
+        # Flussonic max_bitrate is in bits/sec, our API takes kbit/s
         if max_bitrate_kbps is not None:
-            body["max_bitrate"] = int(max_bitrate_kbps) * 1000 // 8 if max_bitrate_kbps > 0 else 0
+            body["max_bitrate"] = int(max_bitrate_kbps) * 1000 if max_bitrate_kbps > 0 else 0
         if source_timeout is not None:
             body["source_timeout"] = int(source_timeout)
         r = await c.put(f"{cfg['api_path']}/streams/{name}", json=body)
@@ -326,7 +326,7 @@ async def update_stream(name: str, payload: dict[str, Any]) -> dict[str, Any] | 
             merged["password"] = payload["publish_password"] or ""
         if "max_bitrate_kbps" in payload:
             kbps = payload["max_bitrate_kbps"]
-            merged["max_bitrate"] = (int(kbps) * 1000 // 8) if kbps and int(kbps) > 0 else 0
+            merged["max_bitrate"] = (int(kbps) * 1000) if kbps and int(kbps) > 0 else 0
         if "source_timeout" in payload:
             merged["source_timeout"] = int(payload["source_timeout"] or 0)
         r = await c.put(f"{cfg['api_path']}/streams/{name}", json=merged)

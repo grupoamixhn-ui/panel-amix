@@ -315,7 +315,7 @@ export default function StreamWizard({ initial, onClose, onSaved, onDeleted }) {
             <div className="text-xs font-semibold mb-3">Limits &amp; timeouts <span className="text-[var(--muted)] font-normal">· optional</span></div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label l="Max input bitrate (kbps)" />
+                <Label l="Max input bitrate (kbit/s)" />
                 <input
                   data-testid="stream-form-max-bitrate"
                   type="number" min="0" step="100"
@@ -325,7 +325,7 @@ export default function StreamWizard({ initial, onClose, onSaved, onDeleted }) {
                   className="w-full px-3 py-2 text-sm mono"
                 />
                 <p className="text-[10px] text-[var(--muted)] mt-1 leading-snug">
-                  Cap the maximum incoming bitrate. Flussonic will drop frames above this. <strong>0 = no cap</strong>.
+                  Cap the maximum incoming bitrate in <strong>kbit/s</strong> (e.g. 5000 = 5 Mbit/s). Flussonic will drop frames above this. <strong>0 = no cap</strong>.
                 </p>
               </div>
               <div>
