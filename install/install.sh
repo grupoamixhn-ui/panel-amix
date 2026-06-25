@@ -279,7 +279,7 @@ ProtectHome=yes
 PrivateTmp=yes
 # Spool dir for update tarballs uploaded via the panel.
 RuntimeDirectoryMode=0750
-ReadWritePaths=$APP_DIR /var/lib/flussonic-admin /etc/letsencrypt
+ReadWritePaths=$APP_DIR /var/lib/flussonic-admin -/etc/letsencrypt
 
 [Install]
 WantedBy=multi-user.target
