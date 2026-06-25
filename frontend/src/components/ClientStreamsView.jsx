@@ -6,11 +6,10 @@ import StreamClientsModal from "./StreamClientsModal";
 import StreamLiveMonitor from "./StreamLiveMonitor";
 import PushTargetsModal from "./PushTargetsModal";
 import StreamWizard from "./StreamWizard";
-import HlsPlayer from "./HlsPlayer";
 import { useAuth } from "../auth";
 import {
-  Search, Activity, Send, Users, Share2, Wifi, Clock, RotateCw, Tv2, Play,
-  Eye, EyeOff, LayoutGrid, List, Radio, Zap, Plus, Pencil, Trash2,
+  Search, Activity, Send, Users, Share2, RotateCw, Tv2,
+  Radio, Zap, Plus, Pencil, Trash2, Wifi,
 } from "lucide-react";
 
 function StatusBadge({ s }) {
@@ -59,168 +58,6 @@ function SourceProto({ s }) {
   return null;
 }
 
-function StreamCard({ s, onMonitor, onPush, onOutputs, onClients, onReset, onEdit, onDelete, resetting, canManage }) {
-  const [showPreview, setShowPreview] = useState(false);
-  const [hlsUrl, setHlsUrl] = useState("");
-  const [hlsLoading, setHlsLoading] = useState(false);
-  const isLive = s.alive;
-
-  const togglePreview = async () => {
-    if (showPreview) { setShowPreview(false); return; }
-    setShowPreview(true);
-    if (!hlsUrl) {
-      setHlsLoading(true);
-      try {
-        const r = await api.get(`/streams/${encodeURIComponent(s.name)}/outputs`);
-        const hls = (r.data?.outputs || []).find((o) => o.protocol === "hls" && o.url?.endsWith(".m3u8"));
-        if (hls) setHlsUrl(hls.url);
-      } catch { /* ignore */ } finally { setHlsLoading(false); }
-    }
-  };
-
-  return (
-    <div
-      className={`group relative rounded-2xl overflow-hidden transition-all duration-300 hover:-translate-y-1 bg-white ${
-        isLive
-          ? "ring-1 ring-emerald-200 shadow-[0_4px_20px_-8px_rgba(16,185,129,0.25)]"
-          : "ring-1 ring-[var(--border)] shadow-[0_2px_10px_-4px_rgba(0,0,0,0.06)]"
-      }`}
-      data-testid={`stream-card-${s.name}`}
-    >
-      {/* Preview area / hero */}
-      <div className="relative aspect-video bg-slate-900 overflow-hidden">
-        {showPreview && hlsUrl ? (
-          <div className="absolute inset-0">
-            <HlsPlayer url={hlsUrl} />
-          </div>
-        ) : (
-          <>
-            <div className="absolute inset-0 opacity-40" style={{
-              backgroundImage: "radial-gradient(circle at 30% 50%, rgba(99,102,241,0.25), transparent 60%), radial-gradient(circle at 70% 80%, rgba(16,185,129,0.18), transparent 50%)",
-            }} />
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className={`w-20 h-20 rounded-2xl flex items-center justify-center backdrop-blur-sm ${isLive ? "bg-emerald-500/15 ring-1 ring-emerald-400/40" : "bg-white/5 ring-1 ring-white/10"}`}>
-                <Tv2 className={`w-10 h-10 ${isLive ? "text-emerald-300" : "text-slate-400"}`} strokeWidth={1.5} />
-              </div>
-            </div>
-            {isLive && (
-              <button
-                onClick={togglePreview}
-                disabled={hlsLoading}
-                className="absolute inset-0 flex items-center justify-center bg-black/0 hover:bg-black/40 transition-colors group/play"
-                data-testid={`card-preview-${s.name}`}
-              >
-                <div className="px-4 py-2.5 rounded-full bg-white/10 backdrop-blur-md ring-1 ring-white/20 text-white text-xs font-semibold opacity-0 group-hover/play:opacity-100 transition-opacity flex items-center gap-2">
-                  <Play className="w-3.5 h-3.5 fill-current" /> {hlsLoading ? "Loading…" : "Watch preview"}
-                </div>
-              </button>
-            )}
-          </>
-        )}
-
-        <div className="absolute top-3 left-3 z-10">
-          <StatusBadge s={s} />
-        </div>
-
-        {isLive && (
-          <div className="absolute top-3 right-3 z-10 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-black/60 backdrop-blur-md ring-1 ring-white/10 text-white text-[10px] font-bold">
-            <Eye className="w-3 h-3" /> {(s.clients || 0).toLocaleString()}
-          </div>
-        )}
-
-        <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/85 via-black/50 to-transparent" />
-        <div className="absolute inset-x-0 bottom-0 p-3 z-10">
-          <div className="text-white font-bold text-base truncate" title={s.name}>{s.name}</div>
-          <div className="mt-0.5"><SourceProto s={s} /></div>
-        </div>
-
-        {showPreview && (
-          <button
-            onClick={() => setShowPreview(false)}
-            className="absolute top-3 right-3 z-20 w-7 h-7 rounded-full bg-black/70 hover:bg-black/90 backdrop-blur text-white flex items-center justify-center"
-            title="Close preview"
-            data-testid={`card-preview-close-${s.name}`}
-          >
-            <EyeOff className="w-3.5 h-3.5" />
-          </button>
-        )}
-      </div>
-
-      {/* Bottom panel — white */}
-      <div className="p-4">
-        <div className="grid grid-cols-3 gap-2 mb-3">
-          <div className="rounded-lg bg-[var(--surface-2)] px-2.5 py-2 ring-1 ring-[var(--border)]">
-            <div className="flex items-center gap-1 text-[9px] uppercase tracking-wider text-[var(--muted)] mb-0.5">
-              <Users className="w-2.5 h-2.5" /> Viewers
-            </div>
-            <div className="text-[15px] font-bold mono text-[var(--text)]" data-testid={`card-viewers-${s.name}`}>{(s.clients || 0).toLocaleString()}</div>
-          </div>
-          <div className="rounded-lg bg-[var(--surface-2)] px-2.5 py-2 ring-1 ring-[var(--border)]">
-            <div className="flex items-center gap-1 text-[9px] uppercase tracking-wider text-[var(--muted)] mb-0.5">
-              <Wifi className="w-2.5 h-2.5" /> Bitrate
-            </div>
-            <div className="text-[15px] font-bold mono text-[var(--text)]">{fmtBitrate(s.bitrate || 0)}</div>
-          </div>
-          <div className="rounded-lg bg-[var(--surface-2)] px-2.5 py-2 ring-1 ring-[var(--border)]">
-            <div className="flex items-center gap-1 text-[9px] uppercase tracking-wider text-[var(--muted)] mb-0.5">
-              <Clock className="w-2.5 h-2.5" /> Uptime
-            </div>
-            <div className="text-[15px] font-bold mono text-[var(--text)] truncate">{fmtUptime(s.uptime || 0)}</div>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-4 gap-1.5">
-          <button onClick={onMonitor} className="flex flex-col items-center gap-1 px-2 py-2.5 rounded-lg bg-[var(--surface-2)] hover:bg-emerald-50 hover:text-emerald-600 text-[var(--text-2)] transition" data-testid={`card-monitor-${s.name}`} title="Live monitor">
-            <Activity className="w-4 h-4" />
-            <span className="text-[9px] font-semibold uppercase tracking-wider">Monitor</span>
-          </button>
-          <button onClick={onPush} className="flex flex-col items-center gap-1 px-2 py-2.5 rounded-lg bg-[var(--surface-2)] hover:bg-pink-50 hover:text-pink-600 text-[var(--text-2)] transition" data-testid={`card-push-${s.name}`} title="Push to social networks">
-            <Send className="w-4 h-4" />
-            <span className="text-[9px] font-semibold uppercase tracking-wider">Push</span>
-          </button>
-          <button onClick={onOutputs} className="flex flex-col items-center gap-1 px-2 py-2.5 rounded-lg bg-[var(--surface-2)] hover:bg-cyan-50 hover:text-cyan-600 text-[var(--text-2)] transition" data-testid={`card-outputs-${s.name}`} title="Playback URLs">
-            <Share2 className="w-4 h-4" />
-            <span className="text-[9px] font-semibold uppercase tracking-wider">URLs</span>
-          </button>
-          <button onClick={onClients} className="flex flex-col items-center gap-1 px-2 py-2.5 rounded-lg bg-[var(--surface-2)] hover:bg-indigo-50 hover:text-indigo-600 text-[var(--text-2)] transition" data-testid={`card-clients-${s.name}`} title="Connected viewers">
-            <Users className="w-4 h-4" />
-            <span className="text-[9px] font-semibold uppercase tracking-wider">Viewers</span>
-          </button>
-        </div>
-
-        <div className="mt-2 flex items-center gap-1.5">
-          <button
-            onClick={onReset}
-            disabled={resetting}
-            className="flex-1 px-3 py-2 text-[10px] font-semibold uppercase tracking-wider rounded-lg text-[var(--muted)] hover:text-amber-600 hover:bg-amber-50 transition flex items-center justify-center gap-1.5"
-            title="Reset · kick viewers & reconnect source"
-            data-testid={`card-reset-${s.name}`}
-          >
-            <RotateCw className={`w-3 h-3 ${resetting ? "animate-spin" : ""}`} />
-            {resetting ? "Resetting…" : "Reset"}
-          </button>
-          {canManage && (
-            <>
-              <button
-                onClick={onEdit}
-                className="px-3 py-2 rounded-lg text-[var(--muted)] hover:text-[var(--primary)] hover:bg-[var(--primary-soft)] transition"
-                title="Edit stream"
-                data-testid={`card-edit-${s.name}`}
-              ><Pencil className="w-3.5 h-3.5" /></button>
-              <button
-                onClick={onDelete}
-                className="px-3 py-2 rounded-lg text-[var(--muted)] hover:text-[var(--error)] hover:bg-[var(--error-soft)] transition"
-                title="Delete stream"
-                data-testid={`card-delete-${s.name}`}
-              ><Trash2 className="w-3.5 h-3.5" /></button>
-            </>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function ListRow({ s, onMonitor, onPush, onOutputs, onClients, onReset, onEdit, onDelete, resetting, canManage }) {
   return (
     <div className={`grid grid-cols-[1fr_auto_auto_auto_auto] items-center gap-4 px-5 py-3.5 hover:bg-[var(--surface-2)] transition ${s.alive ? "border-l-2 border-emerald-400" : "border-l-2 border-transparent"}`} data-testid={`stream-row-${s.name}`}>
@@ -265,7 +102,6 @@ export default function ClientStreamsView() {
   const [streams, setStreams] = useState([]);
   const [q, setQ] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [view, setView] = useState("grid");
   const [wizardOpen, setWizardOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [outputsFor, setOutputsFor] = useState(null);
@@ -448,23 +284,9 @@ export default function ClientStreamsView() {
               >{lbl}</button>
             ))}
           </div>
-          <div className="ml-auto flex items-center gap-1 p-1 bg-white ring-1 ring-[var(--border)] rounded-lg">
-            <button
-              onClick={() => setView("grid")}
-              className={`px-2 py-1.5 rounded-md transition ${view === "grid" ? "bg-[var(--surface-2)] text-[var(--text)]" : "text-[var(--muted)] hover:text-[var(--text)]"}`}
-              title="Grid view"
-              data-testid="view-grid"
-            ><LayoutGrid className="w-3.5 h-3.5" /></button>
-            <button
-              onClick={() => setView("list")}
-              className={`px-2 py-1.5 rounded-md transition ${view === "list" ? "bg-[var(--surface-2)] text-[var(--text)]" : "text-[var(--muted)] hover:text-[var(--text)]"}`}
-              title="List view"
-              data-testid="view-list"
-            ><List className="w-3.5 h-3.5" /></button>
-          </div>
         </div>
 
-        {/* Streams */}
+        {/* Streams — list only */}
         {filtered.length === 0 ? (
           <div className="cell p-16 text-center" data-testid="empty-state">
             <Tv2 className="w-12 h-12 text-[var(--muted)] mx-auto mb-3" strokeWidth={1.5} />
@@ -473,24 +295,6 @@ export default function ClientStreamsView() {
                 ? "No streams have been assigned to your account yet. Contact your provider to get started."
                 : "No streams match the current filter."}
             </div>
-          </div>
-        ) : view === "grid" ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4" data-testid="streams-grid">
-            {filtered.map((s) => (
-              <StreamCard
-                key={s.name}
-                s={s}
-                onMonitor={() => setMonitorFor(s.name)}
-                onPush={() => setPushFor(s.name)}
-                onOutputs={() => setOutputsFor(s.name)}
-                onClients={() => setClientsFor(s.name)}
-                onReset={() => reset(s.name)}
-                onEdit={() => handleEdit(s.name)}
-                onDelete={() => handleDelete(s.name)}
-                resetting={!!resetting[s.name]}
-                canManage={canManage}
-              />
-            ))}
           </div>
         ) : (
           <div className="cell overflow-hidden divide-y divide-[var(--border)]" data-testid="streams-list">
