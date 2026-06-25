@@ -1,0 +1,32 @@
+{
+  "summary": "Iteration 4 — Verified the new self-hosted installer endpoints + Settings card. Backend: 12/12 pytest tests pass against the live deployment — /api/download/installer/info returns valid metadata (filename matches /flussonic-admin-\\d.+\\.tar\\.gz/, sha256 is 64-hex, size_bytes>1000, download_url honors X-Forwarded-Proto=https, curl_oneliner includes filename + install/install.sh), /api/download/installer streams the actual gzipped tarball with bytes whose length AND sha256 match /info, the tarball includes install/install.sh (mode 0o755 executable) + uninstall.sh + README.md + make-release.sh + backend/server.py + backend/requirements.txt + frontend/package.json + README.md + VERSION, and contains NO .env / node_modules / .venv / __pycache__ / test_reports / .git entries. /api/download/installer/rebuild returns 401 without cookie, 403 for a freshly-created reseller sub-user, and 200 {ok:true, filename, size_bytes} for admin; post-rebuild /info reflects the new filename/size and the freshly-downloaded bytes hash to the advertised sha. Frontend Playwright: Settings page card (data-testid='settings-installer') renders with installer-version='2026.06.25-0929070', the Download button is a real <a download> linking to https://flussonic-control.preview.emergentagent.com/api/download/installer, the curl block has the dark bg-[#0F172A] class and contains the full one-liner, the copy and rebuild buttons exist with the correct testids. Clicking rebuild fired POST /api/download/installer/rebuild → 200 (verified via response listener), the RefreshCw icon got animate-spin and the button was disabled during the in-flight request, and /api/download/installer/info was re-fetched (call #3) after rebuild — version field re-rendered correctly. No defects found.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_installer_download.py",
+    "/app/test_reports/pytest/installer_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py:565-587 _ensure_release_built() holds an asyncio.Lock and shells out to make-release.sh on first call. While building, any concurrent /info or /download request will await the same lock — good. However, the lock only guards the build path; if the tarball already exists, callers skip the lock — fine. One concern: read_bytes() in /info (line 597) reads the entire ~295 KB tarball into memory on every /info call just to recompute the sha. For a real production deploy this is cheap, but caching (sha, size) keyed by tarball.stat().st_mtime would avoid the per-request disk read. Low priority.",
+    "server.py:631-645 rebuild_installer() deletes ALL existing flussonic-admin-*.tar.gz files BEFORE calling _ensure_release_built(). If make-release.sh fails, the panel is left with no tarball and the next /info call will attempt to rebuild on demand. Acceptable, but worth a try/except that restores the old file on build failure. Low priority.",
+    "server.py:600-602 X-Forwarded-Proto/X-Forwarded-Host trust is implicit (any client could spoof these by hitting the backend directly). Behind the K8s ingress this is fine, but if the backend ever gets exposed without a proxy, an attacker could craft a fake download_url. Consider validating against a configured allowlist or using request.base_url with FastAPI's ProxyHeadersMiddleware which has stricter parsing. Low/info severity.",
+    "Settings.jsx:50-58 rebuildRelease() catches errors silently with a console.warn. If make-release.sh ever fails (500 from /rebuild), the user only sees the spinner stop — no toast/error banner. Minor UX gap. Consider surfacing the error via the existing toast system.",
+    "Settings.jsx:418-427 The download anchor uses release.download_url directly (an absolute https URL from /info). Good — survives reverse-proxy / domain changes. The download attribute will trigger a save-as dialog with the tarball filename.",
+    "Pre-existing (not from this feature): repeated React console warning 'Encountered two children with the same key, /streamer/api/v3/streams/{name}' appears throughout the session — unrelated to installer card, but worth a future investigation in the Streams/Sessions list rendering."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_installer_download.py"
+  ],
+  "success_rate": {"backend": "100% (12/12)", "frontend": "100% of in-scope flows"},
+  "test_credentials": "admin@flussonic.io / admin123",
+  "seed_data_creation": "Created reseller sub-user test_installer_reseller@example.com / ResellerPass123! (role=reseller, name='TEST Installer Reseller') via POST /api/sub-users for the 403 non-admin check. Module-scoped fixture cleans it up via DELETE /api/sub-users/{id} at teardown. If a previous run left it behind, the fixture tolerates 409 on create.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "New endpoints: GET /api/download/installer/info (public), GET /api/download/installer (public file dl), POST /api/download/installer/rebuild (admin only). Canonical regression suite: /app/backend/tests/test_installer_download.py — re-run with REACT_APP_BACKEND_URL=https://flussonic-control.preview.emergentagent.com pytest backend/tests/test_installer_download.py -v. Frontend testids on Settings page: settings-installer, installer-version, installer-download-btn, installer-curl, installer-copy-curl, installer-rebuild-btn. The card only renders when /info returns success (release && !release.unavailable). The release tarball lives at /app/dist/flussonic-admin-<version>.tar.gz; built by /app/install/make-release.sh.",
+  "rca of the issue": "N/A — feature working as designed end-to-end. Curl-side verified earlier by main agent (1a7a0a3a90 sha), now confirmed by pytest + Playwright."
+}

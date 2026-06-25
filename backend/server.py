@@ -7,6 +7,9 @@ load_dotenv(ROOT_DIR / ".env")
 import os
 import logging
 import base64
+import asyncio
+import hashlib
+import subprocess
 from datetime import datetime, timezone, timedelta
 from typing import Any
 
@@ -15,6 +18,7 @@ import jwt
 from bson import ObjectId
 from bson.errors import InvalidId
 from fastapi import FastAPI, APIRouter, HTTPException, Request, Response, Depends, UploadFile, File, Form
+from fastapi.responses import FileResponse, PlainTextResponse
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, EmailStr, Field
 from starlette.middleware.cors import CORSMiddleware
@@ -547,6 +551,98 @@ async def branding_logo_clear(user=Depends(get_current_user)):
 @api.get("/")
 async def root():
     return {"service": "flussonic-admin-api", "status": "ok"}
+
+
+# ---------- Self-hosted installer download ----------
+# These endpoints expose the install tarball so admins can fetch it from a
+# fresh VPS via a single curl/wget. The tarball is built on-demand from the
+# bundled make-release.sh and cached on disk.
+INSTALL_DIR = ROOT_DIR.parent / "install"
+DIST_DIR = ROOT_DIR.parent / "dist"
+_release_build_lock = asyncio.Lock()
+
+
+async def _ensure_release_built() -> Path | None:
+    """Return the newest tarball in dist/, building one on the fly if missing."""
+    DIST_DIR.mkdir(parents=True, exist_ok=True)
+    candidates = sorted(DIST_DIR.glob("flussonic-admin-*.tar.gz"), key=lambda p: p.stat().st_mtime, reverse=True)
+    if candidates:
+        return candidates[0]
+    script = INSTALL_DIR / "make-release.sh"
+    if not script.is_file():
+        return None
+    async with _release_build_lock:
+        candidates = sorted(DIST_DIR.glob("flussonic-admin-*.tar.gz"), key=lambda p: p.stat().st_mtime, reverse=True)
+        if candidates:
+            return candidates[0]
+        proc = await asyncio.create_subprocess_exec(
+            "bash", str(script), "--out", str(DIST_DIR),
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+        )
+        out, _ = await proc.communicate()
+        if proc.returncode != 0:
+            logger.error("make-release.sh failed (%s): %s", proc.returncode, out.decode(errors="replace")[-500:])
+            return None
+    candidates = sorted(DIST_DIR.glob("flussonic-admin-*.tar.gz"), key=lambda p: p.stat().st_mtime, reverse=True)
+    return candidates[0] if candidates else None
+
+
+@api.get("/download/installer/info")
+async def download_installer_info(request: Request):
+    """Public metadata about the latest release tarball + a ready-to-paste
+    curl one-liner. Public on purpose so a fresh VPS can fetch it without auth."""
+    tarball = await _ensure_release_built()
+    if not tarball:
+        raise HTTPException(status_code=503, detail="Release tarball not available — make-release.sh missing or failed")
+    data = tarball.read_bytes()
+    sha = hashlib.sha256(data).hexdigest()
+    # Honor reverse-proxy headers so the URL matches the public scheme/host.
+    fwd_proto = request.headers.get("x-forwarded-proto") or request.url.scheme
+    fwd_host = request.headers.get("x-forwarded-host") or request.headers.get("host") or request.url.netloc
+    public_url = f"{fwd_proto}://{fwd_host}/api/download/installer"
+    inner_dir = tarball.name[:-len(".tar.gz")]
+    return {
+        "filename": tarball.name,
+        "version": inner_dir.replace("flussonic-admin-", ""),
+        "size_bytes": len(data),
+        "sha256": sha,
+        "download_url": public_url,
+        "curl_oneliner": (
+            f"curl -fsSL '{public_url}' -o /tmp/{tarball.name} && "
+            f"cd /tmp && tar xzf {tarball.name} && cd {inner_dir} && "
+            f"sudo bash install/install.sh"
+        ),
+    }
+
+
+@api.get("/download/installer", name="download_installer")
+async def download_installer():
+    """Serve the latest release tarball as a file download (no auth)."""
+    tarball = await _ensure_release_built()
+    if not tarball:
+        raise HTTPException(status_code=503, detail="Release tarball not available")
+    return FileResponse(
+        path=tarball,
+        media_type="application/gzip",
+        filename=tarball.name,
+    )
+
+
+@api.post("/download/installer/rebuild")
+async def rebuild_installer(user=Depends(get_current_user)):
+    """Force-rebuild the tarball (admin-only). Use after code changes."""
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    DIST_DIR.mkdir(parents=True, exist_ok=True)
+    for old in DIST_DIR.glob("flussonic-admin-*.tar.gz"):
+        try:
+            old.unlink()
+        except OSError:
+            pass
+    tarball = await _ensure_release_built()
+    if not tarball:
+        raise HTTPException(status_code=500, detail="Rebuild failed — check backend logs")
+    return {"ok": True, "filename": tarball.name, "size_bytes": tarball.stat().st_size}
 
 
 app.include_router(api)

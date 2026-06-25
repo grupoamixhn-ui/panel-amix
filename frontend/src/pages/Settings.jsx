@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import api from "../api";
 import PageHeader from "../components/PageHeader";
 import BrandingSection from "../components/BrandingSection";
-import { Zap, Cable, CheckCircle2, XCircle, Loader2, Trash2 } from "lucide-react";
+import { Zap, Cable, CheckCircle2, XCircle, Loader2, Trash2, Download, Copy, RefreshCw, Package } from "lucide-react";
 
 export default function Settings() {
   const [info, setInfo] = useState(null);
@@ -13,6 +13,9 @@ export default function Settings() {
   const [saving, setSaving] = useState(false);
   const [testResult, setTestResult] = useState(null); // {ok, error?, version?}
   const [savedFlash, setSavedFlash] = useState(false);
+  const [release, setRelease] = useState(null);  // {filename, version, size_bytes, sha256, download_url, curl_oneliner}
+  const [rebuilding, setRebuilding] = useState(false);
+  const [copied, setCopied] = useState("");
 
   const loadAll = async () => {
     const [i, c] = await Promise.all([
@@ -37,6 +40,50 @@ export default function Settings() {
   };
 
   useEffect(() => { loadAll().catch((e) => console.error(e)); }, []);
+
+  useEffect(() => {
+    api.get("/download/installer/info")
+      .then((r) => setRelease(r.data))
+      .catch(() => setRelease({ unavailable: true }));
+  }, []);
+
+  const rebuildRelease = async () => {
+    setRebuilding(true);
+    try {
+      await api.post("/download/installer/rebuild");
+      const r = await api.get("/download/installer/info");
+      setRelease(r.data);
+    } catch (e) {
+      console.error("rebuild failed", e);
+      window.alert("Rebuild failed: " + (e?.response?.data?.detail || e.message));
+    } finally {
+      setRebuilding(false);
+    }
+  };
+
+  const copyText = async (key, text) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(key);
+      setTimeout(() => setCopied(""), 1500);
+    } catch {
+      // fallback (older browsers)
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand("copy"); setCopied(key); setTimeout(() => setCopied(""), 1500); } catch (e) { /* noop */ }
+      document.body.removeChild(ta);
+    }
+  };
+
+  const fmtBytes = (n) => {
+    if (!n) return "0 B";
+    const units = ["B", "KB", "MB", "GB"];
+    let i = 0;
+    while (n >= 1024 && i < units.length - 1) { n /= 1024; i++; }
+    return `${n.toFixed(n < 10 ? 1 : 0)} ${units[i]}`;
+  };
 
   const onField = (k, v) => { setForm((f) => ({ ...f, [k]: v })); setTouched(true); setTestResult(null); };
 
@@ -321,6 +368,85 @@ export default function Settings() {
             </div>
           </div>
         </div>
+
+        {/* Self-hosted installer download */}
+        {release && !release.unavailable && (
+          <div className="cell p-6" data-testid="settings-installer">
+            <div className="flex items-start justify-between gap-4 mb-4">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-lg bg-[var(--primary-soft)] flex items-center justify-center shrink-0">
+                  <Package className="w-5 h-5 text-[var(--primary)]" />
+                </div>
+                <div>
+                  <div className="font-semibold text-sm">Self-hosted installer</div>
+                  <div className="text-xs text-[var(--muted)] leading-snug mt-0.5">
+                    Download a ready-to-deploy tarball for your own VPS (Ubuntu / Debian / AlmaLinux). The bundled <span className="mono">install.sh</span> sets up Python, Node, MongoDB, nginx and a systemd service.
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={rebuildRelease}
+                disabled={rebuilding}
+                className="btn-icon"
+                title="Rebuild from current source (admin only)"
+                data-testid="installer-rebuild-btn"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${rebuilding ? "animate-spin" : ""}`} />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+              <div className="px-3 py-2 rounded-lg bg-[var(--surface-2)] border border-[var(--border)]">
+                <div className="label mb-0.5">Version</div>
+                <div className="mono text-xs font-semibold" data-testid="installer-version">{release.version}</div>
+              </div>
+              <div className="px-3 py-2 rounded-lg bg-[var(--surface-2)] border border-[var(--border)]">
+                <div className="label mb-0.5">Size</div>
+                <div className="mono text-xs font-semibold">{fmtBytes(release.size_bytes)}</div>
+              </div>
+              <div className="px-3 py-2 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] col-span-2">
+                <div className="label mb-0.5 flex items-center justify-between">
+                  <span>SHA-256</span>
+                  <button onClick={() => copyText("sha", release.sha256)} className="text-[var(--muted)] hover:text-[var(--text)] p-0.5" title="Copy">
+                    <Copy className="w-3 h-3" />
+                  </button>
+                </div>
+                <div className="mono text-[10px] text-[var(--muted)] truncate">{release.sha256}</div>
+              </div>
+            </div>
+
+            <a
+              href={release.download_url}
+              className="btn btn-primary w-full justify-center mb-4"
+              download
+              data-testid="installer-download-btn"
+            >
+              <Download className="w-4 h-4" />
+              Download {release.filename}
+              {copied === "sha" && <span className="ml-2 text-[10px] mono opacity-80">checksum copied</span>}
+            </a>
+
+            <div className="rounded-xl border border-[var(--border)] bg-[#0F172A] text-[#E2E8F0] p-4 font-mono text-[11.5px] leading-relaxed relative" data-testid="installer-curl">
+              <button
+                onClick={() => copyText("curl", release.curl_oneliner)}
+                className="absolute top-2 right-2 p-1.5 rounded-md bg-white/10 hover:bg-white/20 text-white"
+                title="Copy command"
+                data-testid="installer-copy-curl"
+              >
+                <Copy className="w-3.5 h-3.5" />
+              </button>
+              <div className="text-[10px] uppercase tracking-wider text-slate-400 mb-2">One-liner install on a fresh server</div>
+              <div className="whitespace-pre-wrap break-all pr-8">{release.curl_oneliner}</div>
+              {copied === "curl" && (
+                <div className="absolute bottom-2 right-2 text-[10px] mono text-emerald-400">copied ✓</div>
+              )}
+            </div>
+
+            <p className="text-[11px] text-[var(--muted)] mt-3 leading-snug">
+              Tip: pass <span className="mono">--domain panel.example.com</span> at the end of the install command to enable HTTPS via Let&apos;s Encrypt automatically.
+            </p>
+          </div>
+        )}
 
         {/* Quick references */}
         <div className="cell p-6" data-testid="settings-help">
