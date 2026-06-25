@@ -507,8 +507,38 @@ class StreamPushIn(BaseModel):
     label: str = ""
 
 
+@api.get("/pushes")
+async def all_pushes_list(user=Depends(get_current_user)):
+    """List push targets across every stream the user can access."""
+    pool = await effective_streams(user)
+    streams = await flussonic.list_streams()
+    if pool is not None:
+        pool_set = set(pool)
+        streams = [s for s in streams if s.get("name") in pool_set]
+    out: list[dict[str, Any]] = []
+    for s in streams:
+        name = s.get("name")
+        if not name:
+            continue
+        try:
+            entries = await flussonic.list_stream_pushes(name)
+        except Exception:  # noqa: BLE001
+            entries = []
+        for p in entries or []:
+            out.append({
+                "stream": name,
+                "stream_title": s.get("title", ""),
+                "stream_alive": bool(s.get("alive")),
+                **p,
+            })
+    return out
+
+
 @api.get("/streams/{name}/pushes")
 async def stream_pushes_list(name: str, user=Depends(get_current_user)):
+    pool = await effective_streams(user)
+    if pool is not None and name not in pool:
+        raise HTTPException(status_code=403, detail="Forbidden")
     try:
         return await flussonic.list_stream_pushes(name)
     except httpx.HTTPStatusError as e:
@@ -519,8 +549,10 @@ async def stream_pushes_list(name: str, user=Depends(get_current_user)):
 
 @api.post("/streams/{name}/pushes")
 async def stream_push_add(name: str, body: StreamPushIn, user=Depends(get_current_user)):
-    if user.get("role") not in ("admin", "reseller"):
-        raise HTTPException(status_code=403, detail="Admin or reseller only")
+    # Clients may manage pushes only on their assigned streams; resellers / admins on everything in scope
+    pool = await effective_streams(user)
+    if pool is not None and name not in pool:
+        raise HTTPException(status_code=403, detail="Forbidden")
     if not body.url:
         raise HTTPException(status_code=400, detail="url is required")
     try:
@@ -535,8 +567,9 @@ async def stream_push_add(name: str, body: StreamPushIn, user=Depends(get_curren
 
 @api.delete("/streams/{name}/pushes")
 async def stream_push_remove(name: str, url: str, user=Depends(get_current_user)):
-    if user.get("role") not in ("admin", "reseller"):
-        raise HTTPException(status_code=403, detail="Admin or reseller only")
+    pool = await effective_streams(user)
+    if pool is not None and name not in pool:
+        raise HTTPException(status_code=403, detail="Forbidden")
     if not url:
         raise HTTPException(status_code=400, detail="url query param is required")
     try:

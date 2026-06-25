@@ -10,6 +10,7 @@ import Stats from "./pages/Stats";
 import Monitor from "./pages/Monitor";
 import Resellers from "./pages/Resellers";
 import Settings from "./pages/Settings";
+import Pushes from "./pages/Pushes";
 import Layout from "./components/Layout";
 
 function Guard({ children }) {
@@ -44,6 +45,7 @@ export default function App() {
             <Route path="/stats" element={<Guard><Stats /></Guard>} />
             <Route path="/monitor" element={<Guard><Monitor /></Guard>} />
             <Route path="/resellers" element={<Guard><Resellers /></Guard>} />
+            <Route path="/pushes" element={<Guard><Pushes /></Guard>} />
             <Route path="/settings" element={<Guard><Settings /></Guard>} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
