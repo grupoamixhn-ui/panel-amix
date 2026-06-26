@@ -86,6 +86,18 @@ User wants a web admin panel for the Flussonic Media Server API. Confirmed via c
     * `server_limits.py` (2 endpoints, 43 lines) — Flussonic server-wide limits CRUD
   - All routes preserve their public paths (e.g. `/api/ssl/status`, `/api/branding`) — zero API surface change.
   - Smoke-tested all 13 endpoints (auth/me, streams, sessions, stats, monitor, config, ssl, branding, server/hardware, server/limits, sub-users, pushes, download) — all return 200.
+- ✅ Stream detail page with HLS preview (2026-06-26):
+  - New route `/streams/:name` and page `StreamDetail.jsx` — clicking a stream name in the list opens a dedicated view.
+  - **HLS player** at the top (reuses `HlsPlayer.jsx`) auto-detects the highest-quality `.m3u8` from `/streams/{name}/outputs`, falls back to a friendly "Preview unavailable" message when CORS blocks playback. Mute/unmute toggle + LIVE badge.
+  - **KPIs sidebar** (6 cards): viewers, input bitrate, output bandwidth, uptime, video codec/res/fps, audio codec/rate/channels.
+  - **Live charts**: bitrate IN/OUT overlay + viewers line chart, polling every 2.5s with 60-point rolling window (~2.5 min history).
+  - **Summary count cards** for Output URLs / Active sessions / Push targets — clicking opens the corresponding existing modal.
+  - **Active viewers table** (first 30): IP, country, protocol, bitrate, bytes sent, duration.
+  - **Push targets list** with status pill + label + URL + bytes-sent.
+  - **Source info card**: URL, publisher IP/proto, max_bitrate, max_sessions.
+  - Action buttons in header: Start/Stop, Reset, Edit (opens `StreamWizard`), Delete (with confirm + nav back to /streams).
+  - All elements have stable `data-testid` for automation: `stream-detail-page`, `hls-player`, `kpi-viewers/input/output/uptime/video/audio`, `chart-bitrate`, `chart-viewers`, `outputs-summary`, `sessions-summary`, `pushes-summary`, `sessions-table`, `pushes-table`, `source-info`.
+  - Verified live with stream `QhuboTv` on user's Flussonic — HLS plays, viewers=30, bitrate=3.93 Mbps, video=h264 1280×720 @ 29.97 fps, audio=aac 48000 Hz 2ch.
 - ✅ "Install Flussonic" + License Key management (2026-06-26):
   - New Settings → **Flussonic** tab with two cards: (1) Install Flussonic Media Server with optional license-key field + live log viewer streaming the installer's stdout in real time, (2) License Key card showing edition / valid-until / masked current key + input to save+push a new key.
   - Backend: `services/flussonic_setup.py` runs the official installer (`/usr/local/bin/flussonic-admin-install-flussonic` via sudoers — only allows HTTPS URLs on the flussonic.com origin for safety). After install completes successfully, the panel auto-detects Flussonic on localhost and saves the connection config so the rest of the panel works without manual setup.
@@ -111,7 +123,7 @@ User wants a web admin panel for the Flussonic Media Server API. Confirmed via c
 
 **P2 (features)**
 - Backend refactor (P2 DONE 2026-06-26): server.py 1097→110 lines (-90%) across deps.py/scope.py/models.py + 9 router modules. flussonic.py 1320→983 lines (-25%) via services/ split (branding/server_limits/pushes/hardware). Further service splits (streams/monitor/config/sessions) deferred — current state is fully maintainable.
-- Stream detail page with embedded HLS preview (hls.js)
+- Stream detail page with embedded HLS preview — DONE 2026-06-26 (route `/streams/:name` + clickable name in list)
 - DVR archive timeline browser
 - Audit log persisted in MongoDB
 - Webhooks / SSE push for sessions instead of polling

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import api, { fmtBitrate, fmtUptime } from "../api";
 import PageHeader from "./PageHeader";
 import OutputsModal from "./OutputsModal";
@@ -72,15 +73,19 @@ function SourceProto({ s }) {
 function ListRow({ s, onMonitor, onPush, onOutputs, onClients, onReset, onEdit, onDelete, resetting, canManage }) {
   return (
     <div className={`grid grid-cols-[1fr_auto_auto_auto_auto] items-center gap-4 px-5 py-3.5 hover:bg-[var(--surface-2)] transition ${s.alive ? "border-l-2 border-emerald-400" : "border-l-2 border-transparent"}`} data-testid={`stream-row-${s.name}`}>
-      <div className="flex items-center gap-3 min-w-0">
+      <Link
+        to={`/streams/${encodeURIComponent(s.name)}`}
+        className="flex items-center gap-3 min-w-0 group"
+        data-testid={`row-open-${s.name}`}
+      >
         <div className={`w-9 h-9 rounded-lg shrink-0 flex items-center justify-center ${s.alive ? "bg-emerald-50 ring-1 ring-emerald-200" : "bg-[var(--surface-2)]"}`}>
           <Tv2 className={`w-4 h-4 ${s.alive ? "text-emerald-600" : "text-[var(--muted)]"}`} />
         </div>
         <div className="min-w-0">
-          <div className="font-semibold text-[var(--text)] truncate">{s.name}</div>
+          <div className="font-semibold text-[var(--text)] truncate group-hover:text-[var(--primary)] transition-colors">{s.name}</div>
           <div className="mt-0.5"><SourceProto s={s} /></div>
         </div>
-      </div>
+      </Link>
       <div className="text-right min-w-[80px]">
         <div className="text-[9px] uppercase tracking-wider text-[var(--muted)]">Viewers</div>
         <div className="text-sm mono font-bold">{(s.clients || 0).toLocaleString()}</div>

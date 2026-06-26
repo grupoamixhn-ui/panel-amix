@@ -5,6 +5,7 @@ import { BrandingProvider } from "./branding";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import Streams from "./pages/Streams";
+import StreamDetail from "./pages/StreamDetail";
 import Sessions from "./pages/Sessions";
 import Stats from "./pages/Stats";
 import Monitor from "./pages/Monitor";
@@ -46,6 +47,7 @@ export default function App() {
             <Route path="/login" element={<LoginRoute />} />
             <Route path="/" element={<Guard><Dashboard /></Guard>} />
             <Route path="/streams" element={<Guard><Streams /></Guard>} />
+            <Route path="/streams/:name" element={<Guard><StreamDetail /></Guard>} />
             <Route path="/sessions" element={<Guard><Sessions /></Guard>} />
             <Route path="/stats" element={<Guard><Stats /></Guard>} />
             <Route path="/monitor" element={<Guard><Monitor /></Guard>} />
