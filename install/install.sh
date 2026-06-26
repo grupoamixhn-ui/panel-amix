@@ -41,6 +41,8 @@ USE_SSL="1"            # 1 = self-signed cert; 0 = plain HTTP; "letsencrypt" = v
 ADMIN_EMAIL="admin@localhost"
 ADMIN_PASSWORD_OVERRIDE=""
 INSTALL_MONGO="1"
+PUBLIC_URL=""           # e.g. https://amix.hn/panel-amix/video — overrides DOMAIN+path
+BASE_PATH=""            # auto-derived from PUBLIC_URL, e.g. /panel-amix/video
 SOURCE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 # ---------- args --------------------------------------------------------------
@@ -53,10 +55,27 @@ while [[ $# -gt 0 ]]; do
     --admin-password)   ADMIN_PASSWORD_OVERRIDE="$2"; shift 2 ;;
     --no-mongo)         INSTALL_MONGO="0"; shift ;;
     --source-dir)       SOURCE_DIR="$2"; shift 2 ;;
+    --public-url)       PUBLIC_URL="$2"; shift 2 ;;
     -h|--help)          sed -n '2,22p' "$0"; exit 0 ;;
     *)                  die "Unknown option: $1" ;;
   esac
 done
+
+# Parse PUBLIC_URL → DOMAIN + BASE_PATH so the panel can live under a subpath
+# (e.g. https://amix.hn/panel-amix/video). When set, switches automatically to
+# Let's Encrypt for SSL on the parsed domain.
+if [[ -n "$PUBLIC_URL" ]]; then
+  PUBLIC_URL="${PUBLIC_URL%/}"  # strip trailing slash
+  proto="${PUBLIC_URL%%://*}"
+  rest="${PUBLIC_URL#*://}"
+  DOMAIN="${rest%%/*}"
+  if [[ "$rest" == "$DOMAIN" ]]; then
+    BASE_PATH=""
+  else
+    BASE_PATH="/${rest#*/}"
+  fi
+  [[ "$proto" == "https" ]] && USE_SSL="letsencrypt" || USE_SSL="0"
+fi
 
 # --domain switches HTTPS to Let's Encrypt (handled after nginx setup)
 if [[ -n "$DOMAIN" ]]; then
@@ -197,19 +216,28 @@ ok "backend venv ready ($($APP_DIR/backend/.venv/bin/python --version))"
 
 # ---------- frontend build ----------------------------------------------------
 title "7/8  Building frontend (React production bundle)"
-# Decide the public URL for the API. If a domain is set, it's https://domain;
-# otherwise relative '' so the browser uses the same host/scheme it's loaded from.
-if [[ -n "$DOMAIN" ]]; then
-  REACT_BACKEND_URL=""   # relative — nginx serves both at same host
+# When deploying under a subpath (--public-url https://host/sub/path), the React
+# bundle and the API requests all live under that prefix. PUBLIC_URL controls
+# the static asset paths in index.html; REACT_APP_BACKEND_URL is read by the
+# axios client; PUBLIC_URL_FULL goes into BrowserRouter basename via index.html
+# meta tag (handled inside React).
+if [[ -n "$BASE_PATH" ]]; then
+  REACT_BACKEND_URL="$PUBLIC_URL"
+  REACT_PUBLIC_URL="$BASE_PATH"
+elif [[ -n "$DOMAIN" ]]; then
+  REACT_BACKEND_URL=""
+  REACT_PUBLIC_URL=""
 else
   REACT_BACKEND_URL=""
+  REACT_PUBLIC_URL=""
 fi
 cat > "$APP_DIR/frontend/.env" <<EOF
 REACT_APP_BACKEND_URL=$REACT_BACKEND_URL
+PUBLIC_URL=$REACT_PUBLIC_URL
 WDS_SOCKET_PORT=0
 EOF
 ( cd "$APP_DIR/frontend" && yarn install --silent --frozen-lockfile 2>/dev/null || yarn install --silent )
-( cd "$APP_DIR/frontend" && yarn build 2>&1 | tail -3 )
+( cd "$APP_DIR/frontend" && PUBLIC_URL="$REACT_PUBLIC_URL" yarn build 2>&1 | tail -3 )
 [[ -d "$APP_DIR/frontend/build" ]] || die "Frontend build failed — no build/ directory produced"
 ok "frontend bundle in $APP_DIR/frontend/build"
 
@@ -377,6 +405,67 @@ NGINX_SITE_NAME="flussonic-admin"
 SERVER_NAME_LINE="server_name _;"
 [[ -n "$DOMAIN" ]] && SERVER_NAME_LINE="server_name $DOMAIN;"
 
+# Build the location blocks. When BASE_PATH is set the panel lives under a sub-path
+# (e.g. https://amix.hn/panel-amix/video) — every public URL is prefixed and the
+# SPA needs a regex alias so React Router catches all sub-routes.
+if [[ -n "$BASE_PATH" ]]; then
+  PANEL_LOCATIONS=$(cat <<NGINX
+    # API mounted under the public sub-path: $BASE_PATH/api/* → backend
+    location ${BASE_PATH}/api/ {
+        proxy_pass http://127.0.0.1:8001/api/;
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_set_header X-Forwarded-Prefix ${BASE_PATH};
+        proxy_read_timeout 120s;
+        proxy_send_timeout 120s;
+    }
+
+    # Cache static build assets
+    location ~* ^${BASE_PATH}/static/.+\.(?:js|css|woff2?|ttf|svg|png|jpg|jpeg|gif|ico)\$ {
+        alias $APP_DIR/frontend/build\$request_uri;
+        expires 30d;
+        add_header Cache-Control "public, max-age=2592000, immutable";
+        try_files \$uri =404;
+    }
+
+    # SPA — strip the sub-path prefix and serve from build/
+    location ${BASE_PATH}/ {
+        alias $APP_DIR/frontend/build/;
+        try_files \$uri \$uri/ ${BASE_PATH}/index.html;
+    }
+
+    # Redirect bare prefix without trailing slash → with slash
+    location = ${BASE_PATH} {
+        return 301 ${BASE_PATH}/;
+    }
+NGINX
+)
+else
+  PANEL_LOCATIONS=$(cat <<NGINX
+    location /api/ {
+        proxy_pass http://127.0.0.1:8001;
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_read_timeout 120s;
+        proxy_send_timeout 120s;
+    }
+    location / {
+        try_files \$uri \$uri/ /index.html;
+    }
+    location ~* \.(?:js|css|woff2?|ttf|svg|png|jpg|jpeg|gif|ico)\$ {
+        expires 30d;
+        add_header Cache-Control "public, max-age=2592000, immutable";
+    }
+NGINX
+)
+fi
+
 if [[ "$USE_SSL" == "1" ]]; then
   # HTTPS with self-signed cert
   cat > /tmp/${NGINX_SITE_NAME}.conf <<EOF
@@ -395,28 +484,7 @@ server {
     root $APP_DIR/frontend/build;
     index index.html;
 
-    # backend API
-    location /api/ {
-        proxy_pass http://127.0.0.1:8001;
-        proxy_http_version 1.1;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto https;
-        proxy_read_timeout 120s;
-        proxy_send_timeout 120s;
-    }
-
-    # SPA fallback
-    location / {
-        try_files \$uri \$uri/ /index.html;
-    }
-
-    # cache the build assets
-    location ~* \.(?:js|css|woff2?|ttf|svg|png|jpg|jpeg|gif|ico)\$ {
-        expires 30d;
-        add_header Cache-Control "public, max-age=2592000, immutable";
-    }
+$PANEL_LOCATIONS
 }
 EOF
 else
@@ -431,25 +499,7 @@ server {
     root $APP_DIR/frontend/build;
     index index.html;
 
-    location /api/ {
-        proxy_pass http://127.0.0.1:8001;
-        proxy_http_version 1.1;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
-        proxy_read_timeout 120s;
-        proxy_send_timeout 120s;
-    }
-
-    location / {
-        try_files \$uri \$uri/ /index.html;
-    }
-
-    location ~* \.(?:js|css|woff2?|ttf|svg|png|jpg|jpeg|gif|ico)\$ {
-        expires 30d;
-        add_header Cache-Control "public, max-age=2592000, immutable";
-    }
+$PANEL_LOCATIONS
 }
 EOF
 fi

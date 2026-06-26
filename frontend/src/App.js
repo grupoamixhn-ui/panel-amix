@@ -33,10 +33,15 @@ function LoginRoute() {
 }
 
 export default function App() {
+  // process.env.PUBLIC_URL is injected at build-time. When the panel is served
+  // under a sub-path (e.g. https://amix.hn/panel-amix/video) the React build is
+  // produced with PUBLIC_URL=/panel-amix/video so BrowserRouter must use the
+  // same prefix as basename to match clean paths server-side.
+  const basename = process.env.PUBLIC_URL || "/";
   return (
     <BrandingProvider>
       <AuthProvider>
-        <BrowserRouter>
+        <BrowserRouter basename={basename}>
           <Routes>
             <Route path="/login" element={<LoginRoute />} />
             <Route path="/" element={<Guard><Dashboard /></Guard>} />
