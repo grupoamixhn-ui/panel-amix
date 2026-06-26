@@ -29,6 +29,7 @@ from routes import auth as auth_routes
 from routes import branding as branding_routes
 from routes import config_flussonic as config_flussonic_routes
 from routes import download as download_routes
+from routes import flussonic_admin as flussonic_admin_routes
 from routes import monitor as monitor_routes
 from routes import server_limits as server_limits_routes
 from routes import ssl as ssl_routes
@@ -53,6 +54,7 @@ api.include_router(ssl_routes.router)
 api.include_router(server_limits_routes.router)
 api.include_router(branding_routes.router)
 api.include_router(download_routes.router)
+api.include_router(flussonic_admin_routes.router)
 # Self-update endpoints (provided by updates.py)
 api.include_router(updates_module.build_router(require_admin))
 

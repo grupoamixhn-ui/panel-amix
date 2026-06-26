@@ -86,6 +86,12 @@ User wants a web admin panel for the Flussonic Media Server API. Confirmed via c
     * `server_limits.py` (2 endpoints, 43 lines) — Flussonic server-wide limits CRUD
   - All routes preserve their public paths (e.g. `/api/ssl/status`, `/api/branding`) — zero API surface change.
   - Smoke-tested all 13 endpoints (auth/me, streams, sessions, stats, monitor, config, ssl, branding, server/hardware, server/limits, sub-users, pushes, download) — all return 200.
+- ✅ "Install Flussonic" + License Key management (2026-06-26):
+  - New Settings → **Flussonic** tab with two cards: (1) Install Flussonic Media Server with optional license-key field + live log viewer streaming the installer's stdout in real time, (2) License Key card showing edition / valid-until / masked current key + input to save+push a new key.
+  - Backend: `services/flussonic_setup.py` runs the official installer (`/usr/local/bin/flussonic-admin-install-flussonic` via sudoers — only allows HTTPS URLs on the flussonic.com origin for safety). After install completes successfully, the panel auto-detects Flussonic on localhost and saves the connection config so the rest of the panel works without manual setup.
+  - License: stored in MongoDB `config.flussonic_license` and pushed to `PUT /streamer/api/v3/config` with `{"key": "..."}` so Flussonic hot-reloads.
+  - 5 new admin-only endpoints: `GET /api/flussonic/detect`, `POST /api/flussonic/install`, `GET /api/flussonic/install/status`, `GET /api/flussonic/license`, `PUT /api/flussonic/license`.
+  - New helper script `install/flussonic-admin-install-flussonic.sh` + sudoers entry installed by `install.sh`. Tarball regenerated.
 - ✅ Backend refactor — complete extraction of routes + service-layer split (2026-06-26):
   - `server.py` further reduced to **110 lines** (-90% from original 1097) — now only app setup, middleware, router mounts, startup/shutdown.
   - New `/app/backend/models.py` (82 ln): all Pydantic schemas (Login, Stream*, FlussonicConfig*, SubUser*).

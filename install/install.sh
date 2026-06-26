@@ -417,6 +417,13 @@ if [[ -f "$SOURCE_DIR/install/flussonic-admin-reset-password.sh" ]]; then
   ok "password reset CLI installed → $RESET_HELPER (run with sudo)"
 fi
 
+# ---------- Flussonic installer helper (panel-driven `Install Flussonic` btn) -
+FLUSSONIC_INSTALL_HELPER="/usr/local/bin/flussonic-admin-install-flussonic"
+if [[ -f "$SOURCE_DIR/install/flussonic-admin-install-flussonic.sh" ]]; then
+  install -m 0755 "$SOURCE_DIR/install/flussonic-admin-install-flussonic.sh" "$FLUSSONIC_INSTALL_HELPER"
+  ok "Flussonic install helper installed → $FLUSSONIC_INSTALL_HELPER"
+fi
+
 SUDOERS_FILE="/etc/sudoers.d/flussonic-admin"
 cat > "$SUDOERS_FILE" <<EOF
 # Allow the backend service to manage its own TLS cert and reload nginx without password.
@@ -425,6 +432,7 @@ $APP_USER ALL=(root) NOPASSWD: /usr/sbin/nginx -s reload
 $APP_USER ALL=(root) NOPASSWD: /usr/sbin/nginx -t
 $APP_USER ALL=(root) NOPASSWD: /usr/bin/certbot
 $APP_USER ALL=(root) NOPASSWD: $UPDATE_HELPER *
+$APP_USER ALL=(root) NOPASSWD: $FLUSSONIC_INSTALL_HELPER *
 EOF
 chmod 440 "$SUDOERS_FILE"
 visudo -c -f "$SUDOERS_FILE" >/dev/null && ok "sudoers helper installed (SSL + panel updates)"

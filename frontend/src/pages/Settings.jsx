@@ -4,13 +4,15 @@ import PageHeader from "../components/PageHeader";
 import BrandingSection from "../components/BrandingSection";
 import SslSection from "../components/SslSection";
 import UpdateSection from "../components/UpdateSection";
-import { Zap, Cable, CheckCircle2, XCircle, Loader2, Trash2, Download, Copy, RefreshCw, Package, Users, AlertTriangle, Image as ImageIcon, ArrowUpCircle, ShieldCheck, BookOpen } from "lucide-react";
+import FlussonicSetupSection from "../components/FlussonicSetupSection";
+import { Zap, Cable, CheckCircle2, XCircle, Loader2, Trash2, Download, Copy, RefreshCw, Package, Users, AlertTriangle, Image as ImageIcon, ArrowUpCircle, ShieldCheck, BookOpen, Server } from "lucide-react";
 
 const TABS = [
   { id: "branding",  label: "Branding",     icon: ImageIcon },
   { id: "updates",   label: "Updates",      icon: ArrowUpCircle },
   { id: "ssl",       label: "SSL",          icon: ShieldCheck },
   { id: "connection",label: "Connection",   icon: Cable },
+  { id: "flussonic", label: "Flussonic",    icon: Server },
   { id: "installer", label: "Installer",    icon: Package },
   { id: "help",      label: "Reference",    icon: BookOpen },
 ];
@@ -476,6 +478,10 @@ export default function Settings() {
           </div>
         </div>
           </>
+        )}
+
+        {activeTab === "flussonic" && (
+          <FlussonicSetupSection />
         )}
 
         {activeTab === "installer" && (<>
