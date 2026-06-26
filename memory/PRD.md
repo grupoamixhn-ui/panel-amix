@@ -86,6 +86,13 @@ User wants a web admin panel for the Flussonic Media Server API. Confirmed via c
     * `server_limits.py` (2 endpoints, 43 lines) — Flussonic server-wide limits CRUD
   - All routes preserve their public paths (e.g. `/api/ssl/status`, `/api/branding`) — zero API surface change.
   - Smoke-tested all 13 endpoints (auth/me, streams, sessions, stats, monitor, config, ssl, branding, server/hardware, server/limits, sub-users, pushes, download) — all return 200.
+- ✅ Backend refactor — complete extraction of routes + service-layer split (2026-06-26):
+  - `server.py` further reduced to **110 lines** (-90% from original 1097) — now only app setup, middleware, router mounts, startup/shutdown.
+  - New `/app/backend/models.py` (82 ln): all Pydantic schemas (Login, Stream*, FlussonicConfig*, SubUser*).
+  - New `/app/backend/scope.py` (68 ln): RBAC helpers `get_descendant_ids`, `in_my_scope`, `effective_streams`, `serialize_user`, `validate_subset`.
+  - New routes: `auth.py` (45 ln), `sub_users.py` (142 ln), `streams.py` (190 ln, includes pushes), `monitor.py` (75 ln, includes sessions/stats/server-info/hardware), `config_flussonic.py` (60 ln).
+  - `flussonic.py` reduced 1320 → 983 lines (-25%) via service-layer split: new `/app/backend/services/` package with `branding.py` (76 ln), `server_limits.py` (86 ln), `pushes.py` (94 ln), `hardware.py` (141 ln). Facade pattern preserves backward compat — `flussonic.py` re-exports public names at the bottom.
+  - 16 endpoints smoke-tested → all 200. Zero regressions vs pre-refactor pytest baseline (same 13 pre-existing failures, all related to Flussonic config drift not the refactor).
 
 ## Prioritized Backlog
 **P1 (post-MVP polish)**
@@ -97,7 +104,7 @@ User wants a web admin panel for the Flussonic Media Server API. Confirmed via c
 - Set cookie `secure=True` when behind HTTPS (env-driven)
 
 **P2 (features)**
-- Backend refactor (P2 partial-done 2026-06-26): split server.py (1097→686 lines) into deps.py + routes/{ssl,branding,download,server_limits}.py. Remaining: extract streams/sessions/stats/sub-users/auth routes; split flussonic.py (1300+ lines) into services/{stream,sessions,monitor,branding,config}.py + models/.
+- Backend refactor (P2 DONE 2026-06-26): server.py 1097→110 lines (-90%) across deps.py/scope.py/models.py + 9 router modules. flussonic.py 1320→983 lines (-25%) via services/ split (branding/server_limits/pushes/hardware). Further service splits (streams/monitor/config/sessions) deferred — current state is fully maintainable.
 - Stream detail page with embedded HLS preview (hls.js)
 - DVR archive timeline browser
 - Audit log persisted in MongoDB
@@ -105,4 +112,3 @@ User wants a web admin panel for the Flussonic Media Server API. Confirmed via c
 
 ## Next Tasks
 - CDN Multi-server (Origin + Edges) — P1
-- Continue backend modular refactor — extract streams/sub-users into routes/ — P2
