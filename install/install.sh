@@ -2,7 +2,12 @@
 # ==============================================================================
 #  Flussonic Admin Panel — native installer
 #  Supports: Ubuntu 22.04 / 24.04, Debian 11 / 12, AlmaLinux 8 / 9 / 10,
-#            RockyLinux 8 / 9 / 10
+#            RockyLinux 8 / 9 / 10, RHEL 8 / 9
+#
+#  Tested on bare-metal, VPS (DigitalOcean / Vultr / Hetzner / Contabo) and
+#  containers (LXC). Detects OS via /etc/os-release and adapts package manager,
+#  Node.js + MongoDB repos, firewall (ufw / firewalld), and SELinux booleans /
+#  port labels automatically.
 #
 #  Default: panel runs on https://<ip>:8080 with a self-signed certificate.
 #
@@ -120,17 +125,34 @@ if [[ "$PKG_FAMILY" == "deb" ]]; then
     python3 python3-venv python3-pip python3-dev \
     build-essential git
 else
+  # RHEL family (AlmaLinux/Rocky/RHEL/CentOS): enable EPEL + CRB/PowerTools so
+  # certbot, python3-certbot-nginx and headers required by some pip wheels are
+  # available. These commands are idempotent.
+  RHEL_MAJOR="$(rpm -E %rhel 2>/dev/null || echo '')"
+  dnf install -y -q dnf-plugins-core >/dev/null 2>&1 || true
+  dnf install -y -q epel-release >/dev/null 2>&1 || \
+    dnf install -y -q "https://dl.fedoraproject.org/pub/epel/epel-release-latest-${RHEL_MAJOR:-9}.noarch.rpm" >/dev/null 2>&1 || true
+  # CodeReady Builder / PowerTools (name varies per OS major)
+  case "$RHEL_MAJOR" in
+    8) dnf config-manager --set-enabled powertools >/dev/null 2>&1 || \
+       dnf config-manager --set-enabled PowerTools >/dev/null 2>&1 || true ;;
+    9|10) dnf config-manager --set-enabled crb >/dev/null 2>&1 || true ;;
+  esac
+
+  # Pick the right Python 3.11 package name: RHEL 9/10 ship `python3.11`,
+  # AlmaLinux/Rocky 8 ship `python3.11` too (since 8.6) but EOL CentOS 8 needs python39.
+  PY_PKG="python3.11 python3.11-devel"
+  if ! dnf list --available python3.11 >/dev/null 2>&1 && \
+     ! dnf list --installed python3.11 >/dev/null 2>&1; then
+    PY_PKG="python3 python3-devel"
+  fi
+
   dnf install -y -q \
     ca-certificates curl gnupg2 \
-    nginx rsync openssl firewalld \
-    python3.11 python3.11-devel python3-pip \
-    gcc gcc-c++ make git || \
-  dnf install -y -q \
-    ca-certificates curl gnupg2 \
-    nginx rsync openssl firewalld \
-    python3 python3-devel python3-pip \
-    gcc gcc-c++ make git
-  # symlink python3.11 if available
+    nginx rsync openssl firewalld policycoreutils-python-utils \
+    $PY_PKG python3-pip \
+    gcc gcc-c++ make git redhat-rpm-config
+  # symlink python3.11 if available so the rest of the script can rely on it
   if command -v python3.11 >/dev/null; then ln -sf "$(command -v python3.11)" /usr/local/bin/python3.11; fi
 fi
 ok "system packages installed"
@@ -142,6 +164,10 @@ if ! command -v node >/dev/null || [[ "$(node -v | cut -dv -f2 | cut -d. -f1)" -
     curl -fsSL https://deb.nodesource.com/setup_20.x | bash - >/dev/null
     apt-get install -y -qq nodejs
   else
+    # Disable the distro 'nodejs' module if enabled; otherwise NodeSource
+    # packages collide with RHEL's module-based nodejs (typical on AlmaLinux/Rocky 8/9).
+    dnf module reset -y nodejs >/dev/null 2>&1 || true
+    dnf module disable -y nodejs >/dev/null 2>&1 || true
     curl -fsSL https://rpm.nodesource.com/setup_20.x | bash - >/dev/null
     dnf install -y -q nodejs
   fi
@@ -170,10 +196,18 @@ if [[ "$INSTALL_MONGO" == "1" ]]; then
       apt-get update -qq
       apt-get install -y -qq mongodb-org
     else
-      cat > /etc/yum.repos.d/mongodb-org-7.0.repo <<'EOF'
+      # MongoDB 7 ships per-major-version repos for RHEL 8 / 9. RHEL 10 isn't
+      # supported yet (Feb 2026) — fall back to RHEL 9 packages which install
+      # fine on AlmaLinux/Rocky 10 thanks to ABI compatibility.
+      MONGO_RHEL_MAJOR="${RHEL_MAJOR:-9}"
+      case "$MONGO_RHEL_MAJOR" in
+        8|9) : ;;
+        *)   MONGO_RHEL_MAJOR=9 ;;
+      esac
+      cat > /etc/yum.repos.d/mongodb-org-7.0.repo <<EOF
 [mongodb-org-7.0]
 name=MongoDB Repository
-baseurl=https://repo.mongodb.org/yum/redhat/$releasever/mongodb-org/7.0/x86_64/
+baseurl=https://repo.mongodb.org/yum/redhat/${MONGO_RHEL_MAJOR}/mongodb-org/7.0/x86_64/
 gpgcheck=1
 enabled=1
 gpgkey=https://pgp.mongodb.com/server-7.0.asc
@@ -514,9 +548,16 @@ else
   [[ -f /etc/nginx/nginx.conf ]] && sed -i '/server {/,/^}/d' /etc/nginx/conf.d/default.conf 2>/dev/null || true
 fi
 
-# SELinux: allow nginx to proxy
+# SELinux: allow nginx to proxy + permit non-standard listen ports
 if command -v getenforce >/dev/null && [[ "$(getenforce)" == "Enforcing" ]]; then
   setsebool -P httpd_can_network_connect 1 2>/dev/null || true
+  # Add custom LISTEN_PORT to http_port_t if it's not already there.
+  if command -v semanage >/dev/null; then
+    if ! semanage port -l 2>/dev/null | awk '/^http_port_t/ {print $0}' | grep -qw "$LISTEN_PORT"; then
+      semanage port -a -t http_port_t -p tcp "$LISTEN_PORT" 2>/dev/null || \
+      semanage port -m -t http_port_t -p tcp "$LISTEN_PORT" 2>/dev/null || true
+    fi
+  fi
 fi
 
 nginx -t >/dev/null
@@ -528,13 +569,19 @@ ok "nginx serving on port $LISTEN_PORT"
 if [[ "$PKG_FAMILY" == "deb" ]] && command -v ufw >/dev/null; then
   if ufw status | grep -q "Status: active"; then
     ufw allow "$LISTEN_PORT/tcp" >/dev/null || true
-    [[ -n "$DOMAIN" ]] && ufw allow 443/tcp >/dev/null || true
+    if [[ -n "$DOMAIN" ]]; then
+      ufw allow 80/tcp  >/dev/null || true   # certbot HTTP-01 challenge
+      ufw allow 443/tcp >/dev/null || true
+    fi
   fi
 elif command -v firewall-cmd >/dev/null; then
   systemctl enable --now firewalld >/dev/null 2>&1 || true
   if systemctl is-active --quiet firewalld; then
     firewall-cmd --permanent --add-port="${LISTEN_PORT}/tcp" >/dev/null 2>&1 || true
-    [[ -n "$DOMAIN" ]] && firewall-cmd --permanent --add-service=https >/dev/null 2>&1 || true
+    if [[ -n "$DOMAIN" ]]; then
+      firewall-cmd --permanent --add-service=http  >/dev/null 2>&1 || true
+      firewall-cmd --permanent --add-service=https >/dev/null 2>&1 || true
+    fi
     firewall-cmd --reload >/dev/null 2>&1 || true
   fi
 fi

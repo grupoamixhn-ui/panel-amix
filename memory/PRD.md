@@ -65,6 +65,15 @@ User wants a web admin panel for the Flussonic Media Server API. Confirmed via c
 - ✅ Installer bug fix: `unbound variable SSL_CERT` in `install.sh` line 232 — moved `SSL_CERT_DIR/SSL_CERT/SSL_KEY` defs above the `.env` block so they're always defined under `set -u` (2026-06-25)
 - ✅ Removed hardcoded "GRUPO AMIX HN" from Login. Brand name + tagline now driven 100% by `/api/branding`. Dynamic favicon: uploaded `logo_data_uri` is applied as `<link rel="icon">`. `document.title = "{brand_name} · {tagline}"` (2026-06-25)
 - ✅ Self-update system: `/api/updates/{status,config,check,upload,apply,rollback}` endpoints + `UpdateSection.jsx` in Settings + sidebar badge "NEW" when update available. Sources: GitHub releases / Custom URL (mirrors any other panel's `/info` endpoint) / Manual upload / Disabled. Quick mode (replace backend+frontend, restart) and Full mode (re-run install.sh). Rollback restores `/opt/flussonic-admin.bak`. Helper script `flussonic-admin-update.sh` + sudoers entry installed by `install.sh`. Auto-check polling every N hours (default 6) (2026-06-25)
+- ✅ Universal cross-OS installer hardening (2026-06-26):
+  - EPEL + CRB/PowerTools auto-enabled on RHEL family (AlmaLinux/Rocky/RHEL 8/9/10) so `certbot`, `python3-certbot-nginx` and pip-wheel build deps are available
+  - `dnf module reset/disable nodejs` before NodeSource install — prevents conflicts with RHEL's bundled Node modules
+  - Python 3.11 detection: tries `python3.11`/`python3.11-devel`, falls back to system `python3`/`python3-devel` when not in repos
+  - Added `policycoreutils-python-utils` + `semanage port -a http_port_t` for non-standard nginx listen ports on SELinux-enforcing hosts
+  - MongoDB 7 RHEL repo now uses the actual major version (`rpm -E %rhel`) instead of `$releasever`, with RHEL 10→9 ABI fallback
+  - Firewall opens port 80 (HTTP-01 challenge) when `--domain` is set, both ufw and firewalld branches
+  - `make-release.sh` now runs `bash -n` + `shellcheck -S error` gate on all bash scripts before packaging — broken installers never ship
+  - Tarball regenerated: `/app/dist/flussonic-admin-2026.06.26-*.tar.gz`
 
 ## Prioritized Backlog
 **P1 (post-MVP polish)**

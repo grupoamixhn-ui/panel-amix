@@ -28,6 +28,26 @@ fi
 NAME="flussonic-admin-${VERSION}"
 mkdir -p "$OUT"
 
+# ---------- validate bash scripts before packaging ---------------------------
+echo "» Validating bash scripts (syntax + shellcheck)…"
+SCRIPTS=(
+  "$ROOT/install/install.sh"
+  "$ROOT/install/make-release.sh"
+)
+[[ -f "$ROOT/install/flussonic-admin-update.sh" ]]         && SCRIPTS+=("$ROOT/install/flussonic-admin-update.sh")
+[[ -f "$ROOT/install/flussonic-admin-reset-password.sh" ]] && SCRIPTS+=("$ROOT/install/flussonic-admin-reset-password.sh")
+for s in "${SCRIPTS[@]}"; do
+  bash -n "$s" || { echo "✗ syntax error in $s" >&2; exit 1; }
+done
+if command -v shellcheck >/dev/null; then
+  # Only fail on errors, allow warnings (style-only)
+  shellcheck -S error -e SC1091,SC2034 "${SCRIPTS[@]}" || \
+    { echo "✗ shellcheck found errors — aborting release" >&2; exit 1; }
+  echo "  ✓ shellcheck clean"
+else
+  echo "  ⚠ shellcheck not installed — skipping deep lint"
+fi
+
 echo "» Packing $NAME …"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
