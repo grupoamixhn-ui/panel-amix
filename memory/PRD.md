@@ -74,6 +74,18 @@ User wants a web admin panel for the Flussonic Media Server API. Confirmed via c
   - Firewall opens port 80 (HTTP-01 challenge) when `--domain` is set, both ufw and firewalld branches
   - `make-release.sh` now runs `bash -n` + `shellcheck -S error` gate on all bash scripts before packaging — broken installers never ship
   - Tarball regenerated: `/app/dist/flussonic-admin-2026.06.26-*.tar.gz`
+- ✅ Real-time Monitor enhancements (2026-06-26):
+  - Hardware & Runtime card on Monitor page exposing CPU model, cores/threads, total RAM (+ used %), kernel, OS/arch, Flussonic version + hostname + uptime. New `GET /api/server/hardware` endpoint reads `/proc/cpuinfo` + `/proc/meminfo` + `platform.uname()` for the panel host and Flussonic `/config` + `/server` for the streamer.
+  - Combined "Bandwidth IN vs OUT" chart overlays both lines in a single panel below the split IN/OUT charts, plus a live `ratio = OUT/IN ×` indicator so operators can read cache amplification at a glance.
+- ✅ Backend refactor — split `server.py` from 1097 → 686 lines (-37%) (2026-06-26):
+  - New `/app/backend/deps.py`: shared Mongo client, JWT secret, password helpers, `get_current_user`, `require_admin`, `require_admin_or_reseller` — eliminates circular imports.
+  - New `/app/backend/routes/` package with domain routers mounted via `api.include_router()`:
+    * `ssl.py` (3 endpoints, 163 lines) — SSL status, upload, Let's Encrypt automation
+    * `branding.py` (4 endpoints, 83 lines) — logo, favicon, theme colors, brand name
+    * `download.py` (3 endpoints, 115 lines) — installer tarball download + curl one-liner + rebuild
+    * `server_limits.py` (2 endpoints, 43 lines) — Flussonic server-wide limits CRUD
+  - All routes preserve their public paths (e.g. `/api/ssl/status`, `/api/branding`) — zero API surface change.
+  - Smoke-tested all 13 endpoints (auth/me, streams, sessions, stats, monitor, config, ssl, branding, server/hardware, server/limits, sub-users, pushes, download) — all return 200.
 
 ## Prioritized Backlog
 **P1 (post-MVP polish)**
@@ -85,7 +97,7 @@ User wants a web admin panel for the Flussonic Media Server API. Confirmed via c
 - Set cookie `secure=True` when behind HTTPS (env-driven)
 
 **P2 (features)**
-- Backend refactor: split `server.py` (>900 lines) and `flussonic.py` (>900 lines) into `/app/backend/routes/`, `/app/backend/services/`, `/app/backend/models/`
+- Backend refactor (P2 partial-done 2026-06-26): split server.py (1097→686 lines) into deps.py + routes/{ssl,branding,download,server_limits}.py. Remaining: extract streams/sessions/stats/sub-users/auth routes; split flussonic.py (1300+ lines) into services/{stream,sessions,monitor,branding,config}.py + models/.
 - Stream detail page with embedded HLS preview (hls.js)
 - DVR archive timeline browser
 - Audit log persisted in MongoDB
@@ -93,4 +105,4 @@ User wants a web admin panel for the Flussonic Media Server API. Confirmed via c
 
 ## Next Tasks
 - CDN Multi-server (Origin + Edges) — P1
-- Backend modular refactor — P2
+- Continue backend modular refactor — extract streams/sub-users into routes/ — P2

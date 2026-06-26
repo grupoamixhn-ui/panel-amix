@@ -5,7 +5,7 @@ import KpiCell from "../components/KpiCell";
 import {
   Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
-import { Activity, AlertTriangle, Cpu, MemoryStick, Pause, Play, Radio, Users, Wifi } from "lucide-react";
+import { Activity, AlertTriangle, Cpu, HardDrive, MemoryStick, Pause, Play, Radio, Server, Users, Wifi } from "lucide-react";
 
 const TICK = { fill: "#71717A", fontSize: 10, fontFamily: "IBM Plex Mono" };
 const MAX_POINTS = 60;          // ~3 minutes at 3s refresh
@@ -18,6 +18,25 @@ function fmtTime(iso) {
   } catch {
     return "";
   }
+}
+
+function fmtBytes(n) {
+  if (!n || n <= 0) return "—";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let v = Number(n); let i = 0;
+  while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
+  return `${v.toFixed(v >= 100 ? 0 : 1)} ${units[i]}`;
+}
+
+function fmtUptime(seconds) {
+  const s = Number(seconds) || 0;
+  if (s <= 0) return "—";
+  const d = Math.floor(s / 86400);
+  const h = Math.floor((s % 86400) / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  if (d > 0) return `${d}d ${h}h`;
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m`;
 }
 
 function PercentTooltip({ active, payload, label }) {
@@ -91,9 +110,73 @@ function MiniChart({ data, dataKey, color, formatter, tooltip, unit }) {
   );
 }
 
+function HwItem({ icon: Icon, label, value, mono = true, testId }) {
+  return (
+    <div className="flex items-start gap-2.5 min-w-0" data-testid={testId}>
+      {Icon && <Icon className="w-3.5 h-3.5 text-[var(--muted)] mt-0.5 shrink-0" />}
+      <div className="min-w-0 flex-1">
+        <div className="label text-[10px]">{label}</div>
+        <div className={`text-sm text-[var(--text)] truncate ${mono ? "mono" : ""}`} title={value}>
+          {value || "—"}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function HardwareInfoCard({ hw }) {
+  const p = hw?.panel_host || {};
+  const f = hw?.flussonic || {};
+  const ramUsed = p.ram_total_bytes && p.ram_available_bytes
+    ? p.ram_total_bytes - p.ram_available_bytes
+    : 0;
+  const ramPct = p.ram_total_bytes ? (ramUsed / p.ram_total_bytes) * 100 : 0;
+
+  return (
+    <div className="cell p-5" data-testid="hardware-info">
+      <div className="flex items-center justify-between mb-4">
+        <div className="label flex items-center gap-2">
+          <Server className="w-3.5 h-3.5" /> Hardware &amp; Runtime
+        </div>
+        {f.reachable && (
+          <div className="mono text-[11px] text-[var(--muted)]" data-testid="hw-flussonic-status">
+            Flussonic {f.version || "online"}{f.edition ? ` · ${f.edition}` : ""}
+          </div>
+        )}
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-x-5 gap-y-4">
+        <HwItem icon={Cpu} label="CPU" value={p.cpu_model} mono={false} testId="hw-cpu-model" />
+        <HwItem
+          icon={Cpu}
+          label="Cores / Threads"
+          value={p.cpu_cores ? `${p.cpu_cores} / ${p.cpu_threads}` : ""}
+          testId="hw-cpu-cores"
+        />
+        <HwItem
+          icon={MemoryStick}
+          label="RAM total"
+          value={p.ram_total_bytes ? `${fmtBytes(p.ram_total_bytes)} (${ramPct.toFixed(0)}% used)` : ""}
+          testId="hw-ram"
+        />
+        <HwItem icon={HardDrive} label="Kernel" value={p.kernel} testId="hw-kernel" />
+        <HwItem icon={Server} label="OS / Arch" value={p.os ? `${p.os} · ${p.arch}` : p.arch} mono={false} testId="hw-os" />
+        <HwItem
+          icon={Server}
+          label="Flussonic"
+          value={f.reachable
+            ? `${f.hostname || "—"}${f.uptime_s ? ` · up ${fmtUptime(f.uptime_s)}` : ""}`
+            : "unreachable"}
+          testId="hw-flussonic"
+        />
+      </div>
+    </div>
+  );
+}
+
 export default function Monitor() {
   const [history, setHistory] = useState([]);     // rolling window
   const [latest, setLatest] = useState(null);
+  const [hw, setHw] = useState(null);             // hardware info — fetched once
   const [paused, setPaused] = useState(false);
   const [error, setError] = useState("");
   const pausedRef = useRef(paused);
@@ -129,6 +212,22 @@ export default function Monitor() {
     const t = setInterval(tick, REFRESH_MS);
     return () => clearInterval(t);
   }, [tick]);
+
+  // Hardware info — fetched once on mount + every 60s (cheap, mostly static)
+  useEffect(() => {
+    let alive = true;
+    const fetchHw = async () => {
+      try {
+        const { data } = await api.get("/server/hardware");
+        if (alive) setHw(data);
+      } catch {
+        /* silent — hardware card simply hides if unavailable */
+      }
+    };
+    fetchHw();
+    const t = setInterval(fetchHw, 60_000);
+    return () => { alive = false; clearInterval(t); };
+  }, []);
 
   const cpuRamBlocked = latest && !latest.cpu_ram_available && latest.mode === "live";
 
@@ -173,6 +272,8 @@ export default function Monitor() {
             </div>
           </div>
         )}
+
+        {hw && <HardwareInfoCard hw={hw} />}
 
         <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
           <KpiCell
@@ -303,6 +404,52 @@ export default function Monitor() {
               </AreaChart>
             </ResponsiveContainer>
           </div>
+        </div>
+
+        {/* Combined IN vs OUT — overlay both lines so the operator can read the
+            cache-hit / amplification ratio at a glance. The fill is intentionally
+            light so the lines stay readable when they overlap. */}
+        <div className="cell p-5" data-testid="chart-bandwidth-combined">
+          <div className="flex items-center justify-between mb-3">
+            <div className="label flex items-center gap-2">
+              <Activity className="w-3.5 h-3.5" /> Bandwidth IN vs OUT · live
+            </div>
+            <div className="mono text-xs flex items-center gap-3">
+              <span className="text-blue-600">▮ in {fmtBitrate(latest?.bandwidth_in_bps ?? 0)}</span>
+              <span className="text-emerald-600">▮ out {fmtBitrate(latest?.bandwidth_out_bps ?? 0)}</span>
+              <span className="text-[var(--muted)]">
+                ratio {(() => {
+                  const i = Number(latest?.bandwidth_in_bps) || 0;
+                  const o = Number(latest?.bandwidth_out_bps) || 0;
+                  if (i <= 0) return "—";
+                  return `${(o / i).toFixed(2)}×`;
+                })()}
+              </span>
+            </div>
+          </div>
+          <ResponsiveContainer width="100%" height={260}>
+            <AreaChart data={history} margin={{ top: 5, right: 6, left: 0, bottom: 0 }}>
+              <defs>
+                <linearGradient id="grad-bw-in-combined" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#2563EB" stopOpacity={0.22} />
+                  <stop offset="100%" stopColor="#2563EB" stopOpacity={0} />
+                </linearGradient>
+                <linearGradient id="grad-bw-out-combined" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#16A34A" stopOpacity={0.22} />
+                  <stop offset="100%" stopColor="#16A34A" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid stroke="#E5E7EB" vertical={false} />
+              <XAxis dataKey="ts" tick={TICK} tickFormatter={fmtTime} axisLine={{ stroke: "#E5E7EB" }} tickLine={false} minTickGap={40} />
+              <YAxis tick={TICK} axisLine={{ stroke: "#E5E7EB" }} tickLine={false} width={56}
+                tickFormatter={(v) => (v >= 1e6 ? `${(v / 1e6).toFixed(0)}M` : v >= 1e3 ? `${(v / 1e3).toFixed(0)}k` : v)} />
+              <Tooltip content={<BwTooltip />} />
+              <Area type="monotone" dataKey="bandwidth_in" name="in" stroke="#2563EB" strokeWidth={2}
+                fill="url(#grad-bw-in-combined)" isAnimationActive={false} />
+              <Area type="monotone" dataKey="bandwidth_out" name="out" stroke="#16A34A" strokeWidth={2}
+                fill="url(#grad-bw-out-combined)" isAnimationActive={false} />
+            </AreaChart>
+          </ResponsiveContainer>
         </div>
 
         <div className="cell p-5" data-testid="chart-viewers">

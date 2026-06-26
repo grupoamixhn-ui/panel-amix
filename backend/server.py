@@ -6,35 +6,34 @@ load_dotenv(ROOT_DIR / ".env")
 
 import os
 import logging
-import base64
-import asyncio
-import hashlib
-import subprocess
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from typing import Any
 
-import bcrypt
 import httpx
-import jwt
 from bson import ObjectId
 from bson.errors import InvalidId
-from fastapi import FastAPI, APIRouter, HTTPException, Request, Response, Depends, UploadFile, File, Form
-from fastapi.responses import FileResponse, PlainTextResponse
-from motor.motor_asyncio import AsyncIOMotorClient
+from fastapi import FastAPI, APIRouter, HTTPException, Request, Response, Depends
 from pydantic import BaseModel, EmailStr, Field
 from starlette.middleware.cors import CORSMiddleware
 
 import flussonic
 import updates as updates_module
+from deps import (
+    db,
+    mongo_client,
+    get_current_user,
+    require_admin,
+    require_admin_or_reseller,
+    hash_password,
+    verify_password,
+    create_access_token,
+)
+from routes import ssl as ssl_routes
+from routes import branding as branding_routes
+from routes import download as download_routes
+from routes import server_limits as server_limits_routes
 
 # ---------- Setup ----------
-mongo_url = os.environ["MONGO_URL"]
-client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ["DB_NAME"]]
-
-JWT_ALGO = "HS256"
-JWT_SECRET = os.environ["JWT_SECRET"]
-
 app = FastAPI(title="Flussonic Admin API")
 api = APIRouter(prefix="/api")
 
@@ -42,82 +41,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(level
 logger = logging.getLogger("flussonic-admin")
 
 
-# ---------- Auth helpers ----------
-def hash_password(pw: str) -> str:
-    return bcrypt.hashpw(pw.encode(), bcrypt.gensalt()).decode()
-
-def verify_password(pw: str, hashed: str) -> bool:
-    try:
-        return bcrypt.checkpw(pw.encode(), hashed.encode())
-    except Exception:
-        return False
-
-def create_access_token(user_id: str, email: str) -> str:
-    payload = {
-        "sub": user_id,
-        "email": email,
-        "exp": datetime.now(timezone.utc) + timedelta(hours=12),
-        "type": "access",
-    }
-    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGO)
-
-
-async def get_current_user(request: Request) -> dict:
-    token = request.cookies.get("access_token")
-    if not token:
-        auth = request.headers.get("Authorization", "")
-        if auth.startswith("Bearer "):
-            token = auth[7:]
-    if not token:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    try:
-        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGO])
-        if payload.get("type") != "access":
-            raise HTTPException(status_code=401, detail="Invalid token type")
-        try:
-            uid = ObjectId(payload["sub"])
-        except InvalidId:
-            raise HTTPException(status_code=401, detail="Invalid token")
-        user = await db.users.find_one({"_id": uid})
-        if not user:
-            raise HTTPException(status_code=401, detail="User not found")
-        # Reject expired users
-        if user.get("expires_at"):
-            try:
-                exp = datetime.fromisoformat(user["expires_at"])
-                if exp.tzinfo is None:
-                    exp = exp.replace(tzinfo=timezone.utc)
-                if exp < datetime.now(timezone.utc):
-                    raise HTTPException(status_code=403, detail="Account expired")
-            except (TypeError, ValueError):
-                pass
-        user["_id"] = str(user["_id"])
-        user["id"] = user["_id"]
-        user.pop("password_hash", None)
-        if user.get("parent_id"):
-            user["parent_id"] = str(user["parent_id"])
-        if user.get("created_by"):
-            user["created_by"] = str(user["created_by"])
-        return user
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Token expired")
-    except jwt.InvalidTokenError:
-        raise HTTPException(status_code=401, detail="Invalid token")
-
-
 # ---------- Role / scope helpers ----------
-def require_admin_or_reseller(user=Depends(get_current_user)):
-    if user.get("role") not in ("admin", "reseller"):
-        raise HTTPException(status_code=403, detail="Forbidden")
-    return user
-
-
-def require_admin(user=Depends(get_current_user)):
-    if user.get("role") != "admin":
-        raise HTTPException(status_code=403, detail="Forbidden")
-    return user
-
-
 async def get_descendant_ids(root_id: str) -> set[str]:
     """All user IDs in the sub-tree rooted at ``root_id`` (excludes the root itself)."""
     found: set[str] = set()
@@ -425,6 +349,12 @@ async def server_info(user=Depends(get_current_user)):
     info["bandwidth_bps"] = sum(int(s.get("bitrate") or 0) for s in scoped)
     return info
 
+
+@api.get("/server/hardware")
+async def server_hardware(user=Depends(get_current_user)):
+    """Hardware + runtime info (panel host + Flussonic version)."""
+    return await flussonic.get_server_hardware()
+
 @api.get("/streams")
 async def streams_list(user=Depends(get_current_user)):
     streams = await flussonic.list_streams()
@@ -692,357 +622,16 @@ async def config_clear(user=Depends(get_current_user)):
     return await flussonic.get_public_config()
 
 
-# ---------- SSL certificate management (self-hosted installs) ----------
-SSL_CERT_PATH = os.environ.get("SSL_CERT_PATH", "/etc/flussonic-admin/ssl/cert.pem")
-SSL_KEY_PATH = os.environ.get("SSL_KEY_PATH", "/etc/flussonic-admin/ssl/key.pem")
-
-
-@api.get("/ssl/status")
-async def ssl_status(user=Depends(get_current_user)):
-    """Read the current SSL certificate metadata from disk."""
-    if user.get("role") != "admin":
-        raise HTTPException(status_code=403, detail="Admin only")
-    info: dict[str, Any] = {
-        "cert_path": SSL_CERT_PATH,
-        "key_path": SSL_KEY_PATH,
-        "exists": False,
-    }
-    if not os.path.exists(SSL_CERT_PATH):
-        return info
-    info["exists"] = True
-    try:
-        import subprocess as _sp
-        out = _sp.run(
-            ["openssl", "x509", "-in", SSL_CERT_PATH, "-noout", "-subject", "-issuer", "-startdate", "-enddate", "-fingerprint", "-sha256"],
-            capture_output=True, text=True, timeout=5,
-        )
-        for line in out.stdout.splitlines():
-            if line.startswith("subject="):
-                info["subject"] = line.split("=", 1)[1].strip()
-            elif line.startswith("issuer="):
-                info["issuer"] = line.split("=", 1)[1].strip()
-                info["self_signed"] = info.get("subject") == info["issuer"]
-            elif line.startswith("notBefore="):
-                info["not_before"] = line.split("=", 1)[1].strip()
-            elif line.startswith("notAfter="):
-                info["not_after"] = line.split("=", 1)[1].strip()
-            elif line.lower().startswith("sha256 fingerprint="):
-                info["fingerprint_sha256"] = line.split("=", 1)[1].strip()
-    except Exception as e:  # noqa: BLE001
-        info["error"] = str(e)
-    return info
-
-
-class SslUploadIn(BaseModel):
-    cert_pem: str            # full chain PEM
-    key_pem: str             # private key PEM
-    also_for_flussonic: bool = False  # if true, also copy to /etc/flussonic/ssl/
-
-
-@api.post("/ssl/upload")
-async def ssl_upload(body: SslUploadIn, user=Depends(get_current_user)):
-    """Replace the active certificate with user-provided PEM strings.
-
-    Requires the backend process to have write access to SSL_CERT_PATH /
-    SSL_KEY_PATH. The installer sets a sudoers rule so `flussonic-admin` can run
-    `/usr/local/bin/flussonic-admin-reload-ssl` without password.
-    """
-    if user.get("role") != "admin":
-        raise HTTPException(status_code=403, detail="Admin only")
-
-    # Basic validation
-    if "BEGIN CERTIFICATE" not in body.cert_pem:
-        raise HTTPException(status_code=400, detail="cert_pem must be a PEM-encoded certificate")
-    if "BEGIN" not in body.key_pem or "PRIVATE KEY" not in body.key_pem:
-        raise HTTPException(status_code=400, detail="key_pem must be a PEM-encoded private key")
-
-    # Write to a temp file first so we never leave a half-written cert behind
-    import tempfile
-    import shutil
-    import subprocess as _sp
-    try:
-        tmp_dir = tempfile.mkdtemp(prefix="ssl-upload-")
-        tmp_cert = os.path.join(tmp_dir, "cert.pem")
-        tmp_key = os.path.join(tmp_dir, "key.pem")
-        with open(tmp_cert, "w") as f:
-            f.write(body.cert_pem.strip() + "\n")
-        with open(tmp_key, "w") as f:
-            f.write(body.key_pem.strip() + "\n")
-        os.chmod(tmp_key, 0o600)
-
-        # Verify the cert+key pair matches before installing
-        cert_mod = _sp.run(["openssl", "x509", "-noout", "-modulus", "-in", tmp_cert], capture_output=True, text=True, timeout=5)
-        key_mod = _sp.run(["openssl", "rsa", "-noout", "-modulus", "-in", tmp_key], capture_output=True, text=True, timeout=5)
-        if cert_mod.returncode != 0 or key_mod.returncode != 0 or cert_mod.stdout != key_mod.stdout:
-            shutil.rmtree(tmp_dir, ignore_errors=True)
-            raise HTTPException(status_code=400, detail="Certificate and private key do not match")
-
-        # Move into place (atomic). If we don't have direct write access we fall back to sudo helper.
-        try:
-            os.makedirs(os.path.dirname(SSL_CERT_PATH), exist_ok=True)
-            shutil.copy2(tmp_cert, SSL_CERT_PATH)
-            shutil.copy2(tmp_key, SSL_KEY_PATH)
-            os.chmod(SSL_KEY_PATH, 0o600)
-        except PermissionError:
-            r = _sp.run(["sudo", "-n", "/usr/local/bin/flussonic-admin-reload-ssl", tmp_cert, tmp_key], capture_output=True, text=True, timeout=15)
-            if r.returncode != 0:
-                raise HTTPException(status_code=500, detail=f"Could not install cert (need sudo). stderr: {r.stderr[:200]}")
-
-        # Optional: also copy to /etc/flussonic/ssl/ so the streaming server uses the same cert
-        if body.also_for_flussonic:
-            flu_dir = "/etc/flussonic/ssl"
-            try:
-                os.makedirs(flu_dir, exist_ok=True)
-                shutil.copy2(SSL_CERT_PATH, os.path.join(flu_dir, "cert.pem"))
-                shutil.copy2(SSL_KEY_PATH, os.path.join(flu_dir, "key.pem"))
-                os.chmod(os.path.join(flu_dir, "key.pem"), 0o600)
-            except PermissionError:
-                # silent — the user can copy manually if our sudoers isn't set
-                pass
-
-        # Reload nginx so the new cert takes effect immediately
-        try:
-            _sp.run(["sudo", "-n", "nginx", "-s", "reload"], capture_output=True, text=True, timeout=5)
-        except Exception:  # noqa: BLE001
-            pass
-
-        shutil.rmtree(tmp_dir, ignore_errors=True)
-        return {"ok": True, "message": "Certificate installed and nginx reloaded"}
-    except HTTPException:
-        raise
-    except Exception as e:  # noqa: BLE001
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-class LetsEncryptIn(BaseModel):
-    domain: str
-    email: str = ""
-
-
-@api.post("/ssl/letsencrypt")
-async def ssl_letsencrypt(body: LetsEncryptIn, user=Depends(get_current_user)):
-    """Trigger certbot --nginx for a given domain. Requires sudo access to certbot."""
-    if user.get("role") != "admin":
-        raise HTTPException(status_code=403, detail="Admin only")
-    if not body.domain or "." not in body.domain:
-        raise HTTPException(status_code=400, detail="A valid domain is required (e.g. panel.example.com)")
-    import subprocess as _sp
-    cmd = ["sudo", "-n", "certbot", "--nginx", "--non-interactive", "--agree-tos", "-d", body.domain]
-    if body.email:
-        cmd += ["-m", body.email]
-    else:
-        cmd += ["--register-unsafely-without-email"]
-    try:
-        r = _sp.run(cmd, capture_output=True, text=True, timeout=120)
-        if r.returncode != 0:
-            return {"ok": False, "message": (r.stderr or r.stdout)[-1000:]}
-        return {"ok": True, "message": r.stdout[-500:]}
-    except FileNotFoundError:
-        raise HTTPException(status_code=400, detail="certbot is not installed on this server")
-    except Exception as e:  # noqa: BLE001
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-# ---------- Branding (logo, brand name) ----------
-class ServerLimitsIn(BaseModel):
-    max_sessions: int | None = None
-    cache_path: str | None = None
-    cache_size: str | None = None
-    client_timeout: int | None = None
-
-
-@api.get("/server/limits")
-async def server_limits_get(user=Depends(get_current_user)):
-    return await flussonic.get_server_limits()
-
-
-@api.put("/server/limits")
-async def server_limits_put(body: ServerLimitsIn, user=Depends(get_current_user)):
-    if user.get("role") != "admin":
-        raise HTTPException(status_code=403, detail="Admin only")
-    try:
-        return await flussonic.set_server_limits(
-            max_sessions=body.max_sessions,
-            cache_path=body.cache_path,
-            cache_size=body.cache_size,
-            client_timeout=body.client_timeout,
-        )
-    except httpx.HTTPStatusError as e:
-        raise HTTPException(
-            status_code=502,
-            detail=f"Flussonic rejected the update ({e.response.status_code})",
-        )
-    except Exception as e:  # noqa: BLE001
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@api.get("/branding")
-async def branding_get():
-    """Public — no auth so the login page can render the logo."""
-    return await flussonic.get_branding()
-
-
-_LOGO_MAX_BYTES = 1_000_000  # 1MB
-_LOGO_MIME = {"image/png", "image/jpeg", "image/jpg", "image/svg+xml", "image/webp", "image/gif"}
-_FAVICON_MAX_BYTES = 300_000  # 300 KB
-_FAVICON_MIME = {"image/png", "image/x-icon", "image/vnd.microsoft.icon", "image/svg+xml", "image/jpeg", "image/webp"}
-import re as _re
-_HEX_COLOR_RE = _re.compile(r"^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$")
-
-
-def _validate_color(value: str | None, field: str) -> str | None:
-    if value is None or value == "":
-        return value  # None = unchanged, "" = clear
-    if not _HEX_COLOR_RE.match(value):
-        raise HTTPException(status_code=400, detail=f"{field} must be a hex color like #2563EB")
-    return value
-
-
-@api.post("/branding")
-async def branding_post(
-    logo: UploadFile | None = File(default=None),
-    favicon: UploadFile | None = File(default=None),
-    brand_name: str | None = Form(default=None),
-    tagline: str | None = Form(default=None),
-    primary_color: str | None = Form(default=None),
-    primary_hover: str | None = Form(default=None),
-    primary_soft: str | None = Form(default=None),
-    user=Depends(get_current_user),
-):
-    data_uri: str | None = None
-    if logo is not None:
-        if logo.content_type not in _LOGO_MIME:
-            raise HTTPException(status_code=400, detail=f"Unsupported logo type: {logo.content_type}")
-        blob = await logo.read()
-        if len(blob) > _LOGO_MAX_BYTES:
-            raise HTTPException(status_code=413, detail="Logo file too large (max 1MB)")
-        data_uri = f"data:{logo.content_type};base64,{base64.b64encode(blob).decode()}"
-
-    favicon_uri: str | None = None
-    if favicon is not None:
-        if favicon.content_type not in _FAVICON_MIME:
-            raise HTTPException(status_code=400, detail=f"Unsupported favicon type: {favicon.content_type}")
-        fblob = await favicon.read()
-        if len(fblob) > _FAVICON_MAX_BYTES:
-            raise HTTPException(status_code=413, detail="Favicon file too large (max 300KB)")
-        favicon_uri = f"data:{favicon.content_type};base64,{base64.b64encode(fblob).decode()}"
-
-    return await flussonic.save_branding(
-        logo_data_uri=data_uri,
-        favicon_data_uri=favicon_uri,
-        brand_name=brand_name,
-        tagline=tagline,
-        primary_color=_validate_color(primary_color, "primary_color"),
-        primary_hover=_validate_color(primary_hover, "primary_hover"),
-        primary_soft=_validate_color(primary_soft, "primary_soft"),
-    )
-
-
-@api.delete("/branding/logo")
-async def branding_logo_clear(user=Depends(get_current_user)):
-    return await flussonic.clear_branding_logo()
-
-
-@api.delete("/branding/favicon")
-async def branding_favicon_clear(user=Depends(get_current_user)):
-    return await flussonic.clear_branding_favicon()
+# ---------- Mount domain routers (extracted from server.py for readability) ----------
+api.include_router(ssl_routes.router)
+api.include_router(server_limits_routes.router)
+api.include_router(branding_routes.router)
+api.include_router(download_routes.router)
 
 
 @api.get("/")
 async def root():
     return {"service": "flussonic-admin-api", "status": "ok"}
-
-
-# ---------- Self-hosted installer download ----------
-# These endpoints expose the install tarball so admins can fetch it from a
-# fresh VPS via a single curl/wget. The tarball is built on-demand from the
-# bundled make-release.sh and cached on disk.
-INSTALL_DIR = ROOT_DIR.parent / "install"
-DIST_DIR = ROOT_DIR.parent / "dist"
-_release_build_lock = asyncio.Lock()
-
-
-async def _ensure_release_built() -> Path | None:
-    """Return the newest tarball in dist/, building one on the fly if missing."""
-    DIST_DIR.mkdir(parents=True, exist_ok=True)
-    candidates = sorted(DIST_DIR.glob("flussonic-admin-*.tar.gz"), key=lambda p: p.stat().st_mtime, reverse=True)
-    if candidates:
-        return candidates[0]
-    script = INSTALL_DIR / "make-release.sh"
-    if not script.is_file():
-        return None
-    async with _release_build_lock:
-        candidates = sorted(DIST_DIR.glob("flussonic-admin-*.tar.gz"), key=lambda p: p.stat().st_mtime, reverse=True)
-        if candidates:
-            return candidates[0]
-        proc = await asyncio.create_subprocess_exec(
-            "bash", str(script), "--out", str(DIST_DIR),
-            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-        )
-        out, _ = await proc.communicate()
-        if proc.returncode != 0:
-            logger.error("make-release.sh failed (%s): %s", proc.returncode, out.decode(errors="replace")[-500:])
-            return None
-    candidates = sorted(DIST_DIR.glob("flussonic-admin-*.tar.gz"), key=lambda p: p.stat().st_mtime, reverse=True)
-    return candidates[0] if candidates else None
-
-
-@api.get("/download/installer/info")
-async def download_installer_info(request: Request):
-    """Public metadata about the latest release tarball + a ready-to-paste
-    curl one-liner. Public on purpose so a fresh VPS can fetch it without auth."""
-    tarball = await _ensure_release_built()
-    if not tarball:
-        raise HTTPException(status_code=503, detail="Release tarball not available — make-release.sh missing or failed")
-    data = tarball.read_bytes()
-    sha = hashlib.sha256(data).hexdigest()
-    # Honor reverse-proxy headers so the URL matches the public scheme/host.
-    fwd_proto = request.headers.get("x-forwarded-proto") or request.url.scheme
-    fwd_host = request.headers.get("x-forwarded-host") or request.headers.get("host") or request.url.netloc
-    public_url = f"{fwd_proto}://{fwd_host}/api/download/installer"
-    inner_dir = tarball.name[:-len(".tar.gz")]
-    return {
-        "filename": tarball.name,
-        "version": inner_dir.replace("flussonic-admin-", ""),
-        "size_bytes": len(data),
-        "sha256": sha,
-        "download_url": public_url,
-        "curl_oneliner": (
-            f"curl -fsSL '{public_url}' -o /tmp/{tarball.name} && "
-            f"cd /tmp && tar xzf {tarball.name} && cd {inner_dir} && "
-            f"sudo bash install/install.sh"
-        ),
-    }
-
-
-@api.get("/download/installer", name="download_installer")
-async def download_installer():
-    """Serve the latest release tarball as a file download (no auth)."""
-    tarball = await _ensure_release_built()
-    if not tarball:
-        raise HTTPException(status_code=503, detail="Release tarball not available")
-    return FileResponse(
-        path=tarball,
-        media_type="application/gzip",
-        filename=tarball.name,
-    )
-
-
-@api.post("/download/installer/rebuild")
-async def rebuild_installer(user=Depends(get_current_user)):
-    """Force-rebuild the tarball (admin-only). Use after code changes."""
-    if user.get("role") != "admin":
-        raise HTTPException(status_code=403, detail="Admin only")
-    DIST_DIR.mkdir(parents=True, exist_ok=True)
-    for old in DIST_DIR.glob("flussonic-admin-*.tar.gz"):
-        try:
-            old.unlink()
-        except OSError:
-            pass
-    tarball = await _ensure_release_built()
-    if not tarball:
-        raise HTTPException(status_code=500, detail="Rebuild failed — check backend logs")
-    return {"ok": True, "filename": tarball.name, "size_bytes": tarball.stat().st_size}
 
 
 # ---------- Self-update endpoints ----------
@@ -1094,4 +683,4 @@ async def on_startup():
 
 @app.on_event("shutdown")
 async def on_shutdown():
-    client.close()
+    mongo_client.close()
