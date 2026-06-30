@@ -187,22 +187,29 @@ def _normalize_stream(name: str, data: dict[str, Any]) -> dict[str, Any]:
     )
     status = stats.get("status") or data.get("status") or ("running" if alive else "stopped")
 
-    # Flussonic v3 publishes stats under various keys depending on version
-    clients = (
+    # Flussonic v3 publishes stats under various keys depending on version.
+    # Critical unit gotcha: `bitrate` / `input_bitrate` are reported in **kbit/s**
+    # (Flussonic native UI shows "2281 kbit/s") while `output_bandwidth` /
+    # `out_bandwidth` / `inputs_bandwidth` are in bits/sec. We normalize the
+    # final value to bits/sec for the panel UI (which calls fmtBitrate(bps)).
+    clients = int(
         stats.get("online_clients")
         or stats.get("client_count")
         or stats.get("clients")
         or data.get("clients")
         or 0
     )
-    bitrate = (
-        stats.get("output_bandwidth")
-        or stats.get("out_bandwidth")
-        or stats.get("inputs_bandwidth")
-        or stats.get("bitrate")
-        or data.get("bitrate")
-        or 0
-    )
+    if stats.get("output_bandwidth") or stats.get("out_bandwidth") or stats.get("inputs_bandwidth"):
+        bitrate = int(
+            stats.get("output_bandwidth")
+            or stats.get("out_bandwidth")
+            or stats.get("inputs_bandwidth")
+            or 0
+        )
+    else:
+        # Fallback: Flussonic returns `bitrate` / `input_bitrate` in **kbps** — convert to bps.
+        kbps = int(stats.get("bitrate") or stats.get("input_bitrate") or data.get("bitrate") or 0)
+        bitrate = kbps * 1000
     # uptime in seconds — Flussonic sends `opened_at` as ms epoch and `lifetime` as ms.
     # When alive=true → real data session uptime; when running=true but alive=false (source
     # unreachable, retrying) → fall back to "time since stream activated" so the UI shows
@@ -234,6 +241,7 @@ def _normalize_stream(name: str, data: dict[str, Any]) -> dict[str, Any]:
         or publish_stats.get("input_addr")
         or publish_stats.get("client_addr")
         or publish_stats.get("remote_addr")
+        or input_stats.get("ip")          # Flussonic 24/25: inputs[0].stats.ip
         or input_stats.get("client_addr")
         or input_stats.get("remote_addr")
         or input_stats.get("published_from")
@@ -246,6 +254,7 @@ def _normalize_stream(name: str, data: dict[str, Any]) -> dict[str, Any]:
         publisher_ip = publisher_ip.rsplit(":", 1)[0]
     publisher_proto = (
         publish_stats.get("published_via")
+        or input_stats.get("proto")        # Flussonic 24/25: inputs[0].stats.proto
         or input_stats.get("published_via")
         or data.get("published_via")
         or ""
@@ -697,10 +706,40 @@ async def get_stream_live_stats(name: str) -> dict[str, Any] | None:
     elif (alive_b or running_b) and isinstance(stats.get("opened_at"), (int, float)):
         uptime_s = max(0, int(_t.time() - stats["opened_at"] / 1000))
 
-    # Bitrates: Flussonic v3 reports bandwidth in bits/sec under inputs_bandwidth /
-    # out_bandwidth / output_bandwidth. Convert input to kbps for the UI.
-    input_bps = int(stats.get("inputs_bandwidth") or stats.get("input_bitrate") or 0)
-    output_bps = int(stats.get("out_bandwidth") or stats.get("output_bandwidth") or 0)
+    # Bitrates: Flussonic v3 reports `input_bitrate` / `bitrate` in **kbit/s**.
+    # The bandwidth-suffixed keys (`out_bandwidth`, `output_bandwidth`,
+    # `inputs_bandwidth`) are in bits/sec when present. Normalize for the UI.
+    input_kbps = int(stats.get("input_bitrate") or stats.get("bitrate") or 0)
+    if input_kbps == 0 and stats.get("inputs_bandwidth"):
+        input_kbps = int(stats["inputs_bandwidth"]) // 1000
+
+    # Output bandwidth: Flussonic 24+ doesn't expose this as a single field on
+    # /streams/{name}, only cumulative `bytes_out`. Estimate as clients × input
+    # bitrate (each viewer pulls ≈ input bitrate). Use exact field when available.
+    clients_n = int(stats.get("online_clients") or stats.get("client_count") or 0)
+    if stats.get("out_bandwidth") or stats.get("output_bandwidth"):
+        output_bps = int(stats.get("out_bandwidth") or stats.get("output_bandwidth") or 0)
+    else:
+        output_bps = clients_n * input_kbps * 1000
+
+    # Publisher IP/proto — try the same paths as _normalize_stream
+    inputs_arr = d.get("inputs") or []
+    input_stats_arr = (inputs_arr[0].get("stats") if inputs_arr and isinstance(inputs_arr[0], dict) else {}) or {}
+    pub_ip = (
+        stats.get("published_from") or stats.get("client_addr") or stats.get("remote_addr")
+        or input_stats_arr.get("ip")
+        or input_stats_arr.get("client_addr")
+        or input_stats_arr.get("remote_addr")
+        or ""
+    )
+    if pub_ip and ":" in pub_ip and pub_ip.count(":") <= 1:
+        pub_ip = pub_ip.rsplit(":", 1)[0]
+    pub_proto = (
+        stats.get("published_via")
+        or input_stats_arr.get("proto")
+        or input_stats_arr.get("published_via")
+        or ""
+    ).lower()
 
     return {
         "ts": datetime.now(timezone.utc).isoformat(),
@@ -708,15 +747,15 @@ async def get_stream_live_stats(name: str) -> dict[str, Any] | None:
         "alive": alive_b,
         "status": stats.get("status") or "",
         "uptime_s": uptime_s,
-        "clients": int(stats.get("online_clients") or stats.get("client_count") or 0),
-        "input_bitrate_kbps": input_bps // 1000 if input_bps > 1000 else input_bps,
+        "clients": clients_n,
+        "input_bitrate_kbps": input_kbps,
         "output_bandwidth_bps": output_bps,
-        "bytes_in": int(stats.get("bytes_in") or stats.get("inputs_bytes") or 0),
+        "bytes_in": int(stats.get("bytes_in") or stats.get("inputs_bytes") or input_stats_arr.get("bytes") or 0),
         "bytes_out": int(stats.get("bytes_out") or stats.get("playback_bytes") or 0),
         "video": video,
         "audio": audio,
-        "publisher_ip": stats.get("published_from") or "",
-        "publisher_proto": (stats.get("published_via") or "").lower(),
+        "publisher_ip": pub_ip,
+        "publisher_proto": pub_proto,
     }
 
 

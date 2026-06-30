@@ -205,7 +205,9 @@ export default function StreamWizard({ initial, onClose, onSaved, onDeleted }) {
   const [typeId, setTypeId] = useState(detected.typeId);
   const [fields, setFields] = useState(detected.fields);
   const [publishPassword, setPublishPassword] = useState(initial?.publish_password || "");
-  const [maxBitrateKbps, setMaxBitrateKbps] = useState(initial?.max_bitrate_kbps || 0);
+  const [maxBitrateKbps, setMaxBitrateKbps] = useState(
+    initial?.max_bitrate_kbps != null ? initial.max_bitrate_kbps : 5120,
+  );
   const [sourceTimeout, setSourceTimeout] = useState(initial?.source_timeout || 60);
   const [maxSessions, setMaxSessions] = useState(initial?.max_sessions || 0);
   const [showPw, setShowPw] = useState(false);

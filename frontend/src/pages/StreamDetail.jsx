@@ -10,6 +10,7 @@ import {
 } from "recharts";
 
 import api, { fmtBitrate } from "../api";
+import { useAuth } from "../auth";
 import HlsPlayer from "../components/HlsPlayer";
 import OutputsModal from "../components/OutputsModal";
 import PushTargetsModal from "../components/PushTargetsModal";
@@ -45,6 +46,8 @@ function copy(text) {
 export default function StreamDetail() {
   const { name } = useParams();
   const nav = useNavigate();
+  const { user } = useAuth();
+  const canManage = user?.role === "admin" || user?.role === "reseller";
 
   const [meta, setMeta] = useState(null);
   const [live, setLive] = useState(null);
@@ -211,13 +214,17 @@ export default function StreamDetail() {
             >
               <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${busy === "reset" ? "animate-spin" : ""}`} /> Reset
             </button>
-            <button type="button" onClick={() => setEditOpen(true)} className="btn btn-secondary" data-testid="edit-btn">
-              <Pencil className="w-3.5 h-3.5 mr-1.5" /> Edit
-            </button>
-            <button type="button" onClick={handleDelete} disabled={busy === "delete"} className="btn btn-danger" data-testid="delete-btn">
-              {busy === "delete" ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5 mr-1.5" />}
-              Delete
-            </button>
+            {canManage && (
+              <>
+                <button type="button" onClick={() => setEditOpen(true)} className="btn btn-secondary" data-testid="edit-btn">
+                  <Pencil className="w-3.5 h-3.5 mr-1.5" /> Edit
+                </button>
+                <button type="button" onClick={handleDelete} disabled={busy === "delete"} className="btn btn-danger" data-testid="delete-btn">
+                  {busy === "delete" ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5 mr-1.5" />}
+                  Delete
+                </button>
+              </>
+            )}
           </div>
         </div>
 

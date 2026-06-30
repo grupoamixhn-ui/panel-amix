@@ -86,7 +86,17 @@ User wants a web admin panel for the Flussonic Media Server API. Confirmed via c
     * `server_limits.py` (2 endpoints, 43 lines) — Flussonic server-wide limits CRUD
   - All routes preserve their public paths (e.g. `/api/ssl/status`, `/api/branding`) — zero API surface change.
   - Smoke-tested all 13 endpoints (auth/me, streams, sessions, stats, monitor, config, ssl, branding, server/hardware, server/limits, sub-users, pushes, download) — all return 200.
-- ✅ Stream detail page with HLS preview (2026-06-26):
+- ✅ Fix tanda 5 problemas reportados por el usuario (2026-06-30):
+  1. **Bug crítico de bitrate**: Flussonic 24+ devuelve `bitrate` / `input_bitrate` en **kbit/s** (no bps como se asumía). El panel mostraba "2.5 kbps" para un stream HD de 2.5 Mbps. Fix en `flussonic.py::_normalize_stream` y `get_stream_live_stats` para multiplicar por 1000 sólo cuando la fuente es el campo kbps.
+  2. **Output Bandwidth = 0 bps**: Flussonic no expone `out_bandwidth` directamente en `/streams/{name}`, sólo `bytes_out` acumulado. Calculamos estimación viva como `clients × input_bitrate` (cada viewer consume ≈ el input bitrate). Stream con 2 viewers ahora muestra 5.08 Mbps correctamente.
+  3. **Publisher IP no visible**: la IP estaba en `data.inputs[0].stats.ip` (camino que el normalizer no probaba). Agregado a la lista de campos consultados. Ahora cada row del Streams list muestra `SRT · 190.109.214.122` / `RTMP · 192.187.102.130` en vez del genérico "publisher connected".
+  4. **Cliente veía botones Edit/Delete** en el StreamDetail: gated detrás de `canManage = role==='admin' || role==='reseller'`.
+  5. **Default max_bitrate** en StreamWizard cambiado a **5120 kbps** (5 Mbps) cuando se crea un stream nuevo (antes era 0 = unlimited).
+- ✅ Reemplazado tab "Flussonic Install" por tab **"Backup"** en Settings (2026-06-30):
+  - Removido `routes/flussonic_admin.py` y `services/flussonic_setup.py` del mount (siguen en disco para retomar después si hace falta).
+  - Nuevo `routes/backup.py` con 3 endpoints: `GET /api/backup/info` (counts), `GET /api/backup/export` (download JSON), `POST /api/backup/import?merge=…` (restore con preservación del admin actual).
+  - Frontend `BackupSection.jsx` con stat cards (users, config docs, format version), botones "Download backup" y "Restore from file…" + toggle "Merge mode".
+  - Smoke-test: backup JSON de 120 KB con 6 users + 4 config docs exporta limpio.
   - New route `/streams/:name` and page `StreamDetail.jsx` — clicking a stream name in the list opens a dedicated view.
   - **HLS player** at the top (reuses `HlsPlayer.jsx`) auto-detects the highest-quality `.m3u8` from `/streams/{name}/outputs`, falls back to a friendly "Preview unavailable" message when CORS blocks playback. Mute/unmute toggle + LIVE badge.
   - **KPIs sidebar** (6 cards): viewers, input bitrate, output bandwidth, uptime, video codec/res/fps, audio codec/rate/channels.
