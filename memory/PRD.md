@@ -86,6 +86,12 @@ User wants a web admin panel for the Flussonic Media Server API. Confirmed via c
     * `server_limits.py` (2 endpoints, 43 lines) — Flussonic server-wide limits CRUD
   - All routes preserve their public paths (e.g. `/api/ssl/status`, `/api/branding`) — zero API surface change.
   - Smoke-tested all 13 endpoints (auth/me, streams, sessions, stats, monitor, config, ssl, branding, server/hardware, server/limits, sub-users, pushes, download) — all return 200.
+- ✅ Geographic viewers map on Stream detail page (2026-06-30):
+  - New `ViewersMap.jsx` component: world choropleth using `react-simple-maps` + world-atlas 110m TopoJSON (CDN-served, no build asset).
+  - Groups active sessions by 2-letter country code, maps to UN M49 numeric IDs (which the TopoJSON uses as `geo.id`), paints each country on a green→red scale based on viewer count.
+  - Hover tooltip shows country name + exact viewer count. "Top countries" sidebar lists the 6 countries with most viewers + total counts.
+  - Inserted between the Output/Sessions/Pushes summary cards and the Active viewers table, only shown when `sessions.length > 0`.
+  - Verified live: stream with 6 viewers shows US (5, dark red) and Canada (1, green) painted correctly.
 - ✅ Fix tanda 5 problemas reportados por el usuario (2026-06-30):
   1. **Bug crítico de bitrate**: Flussonic 24+ devuelve `bitrate` / `input_bitrate` en **kbit/s** (no bps como se asumía). El panel mostraba "2.5 kbps" para un stream HD de 2.5 Mbps. Fix en `flussonic.py::_normalize_stream` y `get_stream_live_stats` para multiplicar por 1000 sólo cuando la fuente es el campo kbps.
   2. **Output Bandwidth = 0 bps**: Flussonic no expone `out_bandwidth` directamente en `/streams/{name}`, sólo `bytes_out` acumulado. Calculamos estimación viva como `clients × input_bitrate` (cada viewer consume ≈ el input bitrate). Stream con 2 viewers ahora muestra 5.08 Mbps correctamente.

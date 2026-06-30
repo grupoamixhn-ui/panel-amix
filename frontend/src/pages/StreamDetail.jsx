@@ -15,6 +15,7 @@ import HlsPlayer from "../components/HlsPlayer";
 import OutputsModal from "../components/OutputsModal";
 import PushTargetsModal from "../components/PushTargetsModal";
 import StreamWizard from "../components/StreamWizard";
+import ViewersMap from "../components/ViewersMap";
 
 const POLL_MS = 2500;
 const HISTORY_MAX = 60;
@@ -336,6 +337,9 @@ export default function StreamDetail() {
             testId="pushes-summary"
           />
         </div>
+
+        {/* ---------- Geographic distribution of viewers ---------- */}
+        {sessions.length > 0 && <ViewersMap sessions={sessions} />}
 
         {/* ---------- Active sessions table ---------- */}
         {sessions.length > 0 && (
