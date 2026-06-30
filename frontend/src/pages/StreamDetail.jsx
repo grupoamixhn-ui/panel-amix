@@ -347,9 +347,9 @@ export default function StreamDetail() {
             <div className="flex items-center justify-between mb-3">
               <div className="label flex items-center gap-2"><Users className="w-3.5 h-3.5" /> Active viewers ({sessions.length})</div>
             </div>
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto max-h-[480px] overflow-y-auto rounded-md border border-[var(--border)]">
               <table className="w-full text-xs">
-                <thead className="text-[var(--muted)] border-b border-[var(--border)]">
+                <thead className="text-[var(--muted)] border-b border-[var(--border)] sticky top-0 bg-[var(--surface)] z-10">
                   <tr>
                     <Th>IP</Th>
                     <Th>Country</Th>
@@ -372,10 +372,10 @@ export default function StreamDetail() {
                   ))}
                 </tbody>
               </table>
-              {sessions.length > 30 && (
-                <div className="text-[11px] text-[var(--muted)] mt-2">Showing 30 of {sessions.length}. See Sessions page for full list.</div>
-              )}
             </div>
+            {sessions.length > 30 && (
+              <div className="text-[11px] text-[var(--muted)] mt-2">Showing 30 of {sessions.length}. See Sessions page for full list.</div>
+            )}
           </div>
         )}
 
