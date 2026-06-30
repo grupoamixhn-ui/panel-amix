@@ -29,7 +29,7 @@ sudo bash install/install.sh
 sudo bash install/install.sh --domain panel.example.com
 
 # Different port (e.g. behind another reverse proxy)
-sudo bash install/install.sh --port 8080
+sudo bash install/install.sh --port 8443
 
 # You already run MongoDB on this host
 sudo bash install/install.sh --no-mongo
@@ -119,8 +119,8 @@ automatically.
 | `502 Bad Gateway` from nginx | `systemctl status flussonic-admin`, then `journalctl -u flussonic-admin -n 80`. |
 | `MongoServerSelectionError` in logs | `systemctl status mongod`. On SELinux systems: `setsebool -P httpd_can_network_connect 1`. |
 | Forgot admin password | Edit `/opt/flussonic-admin/backend/.env`, set a new `ADMIN_PASSWORD=...`, then `sudo systemctl restart flussonic-admin`. The backend re-syncs the password from `.env` on every startup. |
-| Need to allow a non-standard listen port through the firewall | `sudo ufw allow 8080/tcp` (Debian/Ubuntu) / `sudo firewall-cmd --permanent --add-port=8080/tcp && sudo firewall-cmd --reload` (RHEL family). |
-| Behind another reverse proxy (Cloudflare, Caddy) | Install with `--port 8080`, then point your proxy at `http://<server>:8080`. Skip `--domain` (the outer proxy handles SSL). |
+| Need to allow a non-standard listen port through the firewall | `sudo ufw allow 8443/tcp` (Debian/Ubuntu) / `sudo firewall-cmd --permanent --add-port=8443/tcp && sudo firewall-cmd --reload` (RHEL family). |
+| Behind another reverse proxy (Cloudflare, Caddy) | Install with `--port 8443`, then point your proxy at `http://<server>:8443`. Skip `--domain` (the outer proxy handles SSL). |
 
 ## Notes
 

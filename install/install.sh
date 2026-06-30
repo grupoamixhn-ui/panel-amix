@@ -9,13 +9,13 @@
 #  Node.js + MongoDB repos, firewall (ufw / firewalld), and SELinux booleans /
 #  port labels automatically.
 #
-#  Default: panel runs on https://<ip>:8080 with a self-signed certificate.
+#  Default: panel runs on https://<ip>:8443 with a self-signed certificate.
 #
 #  Usage:
-#    sudo bash install.sh                              # https://<ip>:8080 (self-signed)
+#    sudo bash install.sh                              # https://<ip>:8443 (self-signed)
 #    sudo bash install.sh --domain panel.example.com   # https + Let's Encrypt (port 443)
 #    sudo bash install.sh --port 9443                  # custom https port (self-signed)
-#    sudo bash install.sh --no-ssl                     # plain http on $port (default 8080)
+#    sudo bash install.sh --no-ssl                     # plain http on $port (default 8443)
 #    sudo bash install.sh --no-mongo                   # skip MongoDB install (already running)
 #    sudo bash install.sh --source-dir /path/to/code   # use code from this dir instead of script dir
 #    sudo bash install.sh --admin-email me@me.com      # custom admin email
@@ -41,7 +41,7 @@ APP_DIR="/opt/flussonic-admin"
 APP_USER="flussonic-admin"
 SERVICE_NAME="flussonic-admin"
 DOMAIN=""
-LISTEN_PORT="8080"
+LISTEN_PORT="8443"
 USE_SSL="1"            # 1 = self-signed cert; 0 = plain HTTP; "letsencrypt" = via certbot
 ADMIN_EMAIL="admin@localhost"
 ADMIN_PASSWORD_OVERRIDE=""
