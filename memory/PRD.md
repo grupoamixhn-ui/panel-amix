@@ -86,6 +86,11 @@ User wants a web admin panel for the Flussonic Media Server API. Confirmed via c
     * `server_limits.py` (2 endpoints, 43 lines) — Flussonic server-wide limits CRUD
   - All routes preserve their public paths (e.g. `/api/ssl/status`, `/api/branding`) — zero API surface change.
   - Smoke-tested all 13 endpoints (auth/me, streams, sessions, stats, monitor, config, ssl, branding, server/hardware, server/limits, sub-users, pushes, download) — all return 200.
+- ✅ SRT dedicated publish/play ports + passphrases + client_timeout per stream (2026-06-30):
+  - Backend: new optional fields in `create_stream` / `update_stream` / `_normalize_stream` — `srt_publish_port`, `srt_publish_passphrase`, `srt_play_port`, `srt_play_passphrase`, `client_timeout`. Pushed to Flussonic via `/streamer/api/v3/streams/{name}` PUT (Flussonic accepts them as top-level keys on the stream config).
+  - Frontend `StreamWizard.jsx`: new "SRT dedicated ports (optional)" section after Max simultaneous viewers, with 4 inputs (publish port, publish passphrase, play port, play passphrase) + a separate Client timeout field. 0 / empty fields are dropped on save so Flussonic uses its default (shared) ports.
+  - Pydantic schemas `StreamIn` / `StreamUpdateIn` extended in `models.py`. Streams route forwards the new args to flussonic.create_stream.
+  - Verified visually in the Modify Stream modal — all 5 fields render with proper placeholders & helper text. Tarball regenerated.
 - ✅ Geographic viewers map on Stream detail page (2026-06-30):
   - New `ViewersMap.jsx` component: world choropleth using `react-simple-maps` + world-atlas 110m TopoJSON (CDN-served, no build asset).
   - Groups active sessions by 2-letter country code, maps to UN M49 numeric IDs (which the TopoJSON uses as `geo.id`), paints each country on a green→red scale based on viewer count.

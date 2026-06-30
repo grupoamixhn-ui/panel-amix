@@ -210,6 +210,11 @@ export default function StreamWizard({ initial, onClose, onSaved, onDeleted }) {
   );
   const [sourceTimeout, setSourceTimeout] = useState(initial?.source_timeout || 60);
   const [maxSessions, setMaxSessions] = useState(initial?.max_sessions || 0);
+  const [srtPublishPort, setSrtPublishPort] = useState(initial?.srt_publish_port || 0);
+  const [srtPublishPassphrase, setSrtPublishPassphrase] = useState(initial?.srt_publish_passphrase || "");
+  const [srtPlayPort, setSrtPlayPort] = useState(initial?.srt_play_port || 0);
+  const [srtPlayPassphrase, setSrtPlayPassphrase] = useState(initial?.srt_play_passphrase || "");
+  const [clientTimeout, setClientTimeout] = useState(initial?.client_timeout || 0);
   const [showPw, setShowPw] = useState(false);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
@@ -229,6 +234,11 @@ export default function StreamWizard({ initial, onClose, onSaved, onDeleted }) {
         max_bitrate_kbps: Number(maxBitrateKbps) || 0,
         source_timeout: Number(sourceTimeout) || 0,
         max_sessions: Number(maxSessions) || 0,
+        srt_publish_port: Number(srtPublishPort) || 0,
+        srt_publish_passphrase: srtPublishPassphrase || "",
+        srt_play_port: Number(srtPlayPort) || 0,
+        srt_play_passphrase: srtPlayPassphrase || "",
+        client_timeout: Number(clientTimeout) || 0,
       };
       if (editing) {
         await api.put(`/streams/${name}`, payload);
@@ -413,6 +423,69 @@ export default function StreamWizard({ initial, onClose, onSaved, onDeleted }) {
                 <p className="text-[10px] text-[var(--muted)] mt-1 leading-snug">
                   Per-stream concurrent viewer cap. When the cap is hit, new viewers get a 503 from Flussonic.
                   <strong> 0 = no per-stream limit</strong> (falls back to the global <code className="mono text-[10px]">max_sessions</code>).
+                </p>
+              </div>
+
+              {/* ----- SRT dedicated ports + passphrases ----- */}
+              <div className="col-span-2 -mt-1 pt-3 border-t border-[var(--border)]">
+                <div className="text-[11px] uppercase tracking-wider text-[var(--muted)] mb-2">SRT dedicated ports (optional)</div>
+              </div>
+              <div>
+                <Label l="SRT publish port" />
+                <input
+                  data-testid="stream-form-srt-publish-port"
+                  type="number" min="0" max="65535" step="1"
+                  value={srtPublishPort}
+                  onChange={(e) => setSrtPublishPort(e.target.value)}
+                  placeholder="0 = use shared port"
+                  className="w-full px-3 py-2 text-sm mono"
+                />
+              </div>
+              <div>
+                <Label l="SRT publish passphrase" />
+                <input
+                  data-testid="stream-form-srt-publish-pass"
+                  type="text"
+                  value={srtPublishPassphrase}
+                  onChange={(e) => setSrtPublishPassphrase(e.target.value)}
+                  placeholder="min. 10 chars (Flussonic SRT spec)"
+                  className="w-full px-3 py-2 text-sm mono"
+                />
+              </div>
+              <div>
+                <Label l="SRT play port" />
+                <input
+                  data-testid="stream-form-srt-play-port"
+                  type="number" min="0" max="65535" step="1"
+                  value={srtPlayPort}
+                  onChange={(e) => setSrtPlayPort(e.target.value)}
+                  placeholder="0 = use shared port"
+                  className="w-full px-3 py-2 text-sm mono"
+                />
+              </div>
+              <div>
+                <Label l="SRT play passphrase" />
+                <input
+                  data-testid="stream-form-srt-play-pass"
+                  type="text"
+                  value={srtPlayPassphrase}
+                  onChange={(e) => setSrtPlayPassphrase(e.target.value)}
+                  placeholder="min. 10 chars (Flussonic SRT spec)"
+                  className="w-full px-3 py-2 text-sm mono"
+                />
+              </div>
+              <div className="col-span-2">
+                <Label l="Client timeout (seconds)" />
+                <input
+                  data-testid="stream-form-client-timeout"
+                  type="number" min="0" step="1"
+                  value={clientTimeout}
+                  onChange={(e) => setClientTimeout(e.target.value)}
+                  placeholder="0 = use server-wide default (60s)"
+                  className="w-full px-3 py-2 text-sm mono"
+                />
+                <p className="text-[10px] text-[var(--muted)] mt-1 leading-snug">
+                  For on-demand streams: after this many seconds without active viewers, the stream is shut down. Live (publish) streams ignore this.
                 </p>
               </div>
             </div>

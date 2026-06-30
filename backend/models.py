@@ -17,6 +17,11 @@ class StreamIn(BaseModel):
     max_bitrate_kbps: int | None = None     # 0 / null = unlimited
     source_timeout: int | None = None        # seconds (default 60 on Flussonic)
     max_sessions: int | None = None          # per-stream concurrent viewer cap
+    srt_publish_port: int | None = None
+    srt_publish_passphrase: str | None = None
+    srt_play_port: int | None = None
+    srt_play_passphrase: str | None = None
+    client_timeout: int | None = None
 
 
 class StreamUpdateIn(BaseModel):
@@ -26,6 +31,11 @@ class StreamUpdateIn(BaseModel):
     max_bitrate_kbps: int | None = None
     source_timeout: int | None = None
     max_sessions: int | None = None
+    srt_publish_port: int | None = None
+    srt_publish_passphrase: str | None = None
+    srt_play_port: int | None = None
+    srt_play_passphrase: str | None = None
+    client_timeout: int | None = None
 
 
 class ToggleIn(BaseModel):

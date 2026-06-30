@@ -33,6 +33,11 @@ async def streams_create(body: StreamIn, user=Depends(get_current_user)):
             max_bitrate_kbps=body.max_bitrate_kbps,
             source_timeout=body.source_timeout,
             max_sessions=body.max_sessions,
+            srt_publish_port=body.srt_publish_port,
+            srt_publish_passphrase=body.srt_publish_passphrase,
+            srt_play_port=body.srt_play_port,
+            srt_play_passphrase=body.srt_play_passphrase,
+            client_timeout=body.client_timeout,
         )
     except ValueError as e:
         raise HTTPException(status_code=409, detail=str(e))

@@ -292,6 +292,11 @@ def _normalize_stream(name: str, data: dict[str, Any]) -> dict[str, Any]:
         "max_bitrate_kbps": max_bitrate_kbps,
         "source_timeout": int(data.get("source_timeout") or 0),
         "max_sessions": per_stream_max_sessions,
+        "srt_publish_port": int(data.get("srt_publish_port") or 0),
+        "srt_publish_passphrase": data.get("srt_publish_passphrase") or "",
+        "srt_play_port": int(data.get("srt_play_port") or 0),
+        "srt_play_passphrase": data.get("srt_play_passphrase") or "",
+        "client_timeout": int(data.get("client_timeout") or 0),
         "publisher_ip": publisher_ip,
         "publisher_proto": publisher_proto,
     }
@@ -363,6 +368,9 @@ async def create_stream(
     name: str, url: str, title: str = "", publish_password: str | None = None,
     *, max_bitrate_kbps: int | None = None, source_timeout: int | None = None,
     max_sessions: int | None = None,
+    srt_publish_port: int | None = None, srt_publish_passphrase: str | None = None,
+    srt_play_port: int | None = None, srt_play_passphrase: str | None = None,
+    client_timeout: int | None = None,
 ) -> dict[str, Any]:
     cfg = await _active_config()
     async with _make_client(cfg) as c:
@@ -377,6 +385,16 @@ async def create_stream(
         if max_sessions is not None:
             ms = int(max_sessions)
             body["on_play"] = {**(body.get("on_play") or {}), "max_sessions": ms if ms > 0 else 0}
+        if srt_publish_port is not None and int(srt_publish_port) > 0:
+            body["srt_publish_port"] = int(srt_publish_port)
+        if srt_publish_passphrase is not None:
+            body["srt_publish_passphrase"] = srt_publish_passphrase
+        if srt_play_port is not None and int(srt_play_port) > 0:
+            body["srt_play_port"] = int(srt_play_port)
+        if srt_play_passphrase is not None:
+            body["srt_play_passphrase"] = srt_play_passphrase
+        if client_timeout is not None:
+            body["client_timeout"] = int(client_timeout)
         r = await c.put(f"{cfg['api_path']}/streams/{name}", json=body)
         r.raise_for_status()
         return _normalize_stream(name, r.json() if r.content else body)
@@ -408,6 +426,27 @@ async def update_stream(name: str, payload: dict[str, Any]) -> dict[str, Any] | 
             on_play = dict(merged.get("on_play") or {})
             on_play["max_sessions"] = ms_int
             merged["on_play"] = on_play
+        # Per-stream SRT dedicated ports + passphrases
+        for key in ("srt_publish_port", "srt_play_port"):
+            if key in payload:
+                v = payload[key]
+                if v is None or v == "" or int(v or 0) <= 0:
+                    merged.pop(key, None)
+                else:
+                    merged[key] = int(v)
+        for key in ("srt_publish_passphrase", "srt_play_passphrase"):
+            if key in payload:
+                v = payload[key] or ""
+                if v:
+                    merged[key] = v
+                else:
+                    merged.pop(key, None)
+        if "client_timeout" in payload:
+            v = payload["client_timeout"]
+            if v is None or int(v or 0) <= 0:
+                merged.pop("client_timeout", None)
+            else:
+                merged["client_timeout"] = int(v)
         r = await c.put(f"{cfg['api_path']}/streams/{name}", json=merged)
         r.raise_for_status()
         try:
