@@ -41,6 +41,11 @@ async def streams_create(body: StreamIn, user=Depends(get_current_user)):
         )
     except ValueError as e:
         raise HTTPException(status_code=409, detail=str(e))
+    except httpx.HTTPStatusError as e:
+        # Surface Flussonic's actual rejection message (usually an "extra_keys" or
+        # "validation" error) so the user can see which field failed.
+        detail = e.response.text[:300] if e.response.text else f"HTTP {e.response.status_code}"
+        raise HTTPException(status_code=400, detail=f"Flussonic rejected the request: {detail}")
 
 
 @router.get("/streams/{name}")

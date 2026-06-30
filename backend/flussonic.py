@@ -387,13 +387,13 @@ async def create_stream(
             body["on_play"] = {**(body.get("on_play") or {}), "max_sessions": ms if ms > 0 else 0}
         if srt_publish_port is not None and int(srt_publish_port) > 0:
             body["srt_publish_port"] = int(srt_publish_port)
-        if srt_publish_passphrase is not None:
+        if srt_publish_passphrase:  # drop empty strings — Flussonic rejects them
             body["srt_publish_passphrase"] = srt_publish_passphrase
         if srt_play_port is not None and int(srt_play_port) > 0:
             body["srt_play_port"] = int(srt_play_port)
-        if srt_play_passphrase is not None:
+        if srt_play_passphrase:
             body["srt_play_passphrase"] = srt_play_passphrase
-        if client_timeout is not None:
+        if client_timeout is not None and int(client_timeout) > 0:
             body["client_timeout"] = int(client_timeout)
         r = await c.put(f"{cfg['api_path']}/streams/{name}", json=body)
         r.raise_for_status()
