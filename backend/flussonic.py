@@ -393,8 +393,10 @@ async def create_stream(
             body["srt_play_port"] = int(srt_play_port)
         if srt_play_passphrase:
             body["srt_play_passphrase"] = srt_play_passphrase
-        if client_timeout is not None and int(client_timeout) > 0:
-            body["client_timeout"] = int(client_timeout)
+        # NOTE: client_timeout is intentionally NOT pushed to Flussonic — it's a
+        # server-wide setting in Flussonic 24+ and gets rejected with
+        # `unknown_key` when sent on a per-stream PUT. Stored only locally if needed.
+        _ = client_timeout  # accepted for API compatibility, ignored
         r = await c.put(f"{cfg['api_path']}/streams/{name}", json=body)
         r.raise_for_status()
         return _normalize_stream(name, r.json() if r.content else body)
@@ -442,11 +444,8 @@ async def update_stream(name: str, payload: dict[str, Any]) -> dict[str, Any] | 
                 else:
                     merged.pop(key, None)
         if "client_timeout" in payload:
-            v = payload["client_timeout"]
-            if v is None or int(v or 0) <= 0:
-                merged.pop("client_timeout", None)
-            else:
-                merged["client_timeout"] = int(v)
+            # Flussonic 24+ rejects this as `unknown_key` at stream level — drop silently
+            merged.pop("client_timeout", None)
         r = await c.put(f"{cfg['api_path']}/streams/{name}", json=merged)
         r.raise_for_status()
         try:
