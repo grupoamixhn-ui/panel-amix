@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import api from "../api";
-import { X, Radio, Tv2, Cast, Camera, Film, Globe, Wifi, Pencil, Trash2, Lock, Eye, EyeOff } from "lucide-react";
+import { X, Radio, Tv2, Cast, Camera, Film, Globe, Wifi, Pencil, Trash2, Lock, Eye, EyeOff, Loader2, Zap, CheckCircle2, XCircle } from "lucide-react";
 
 const TYPES = [
   { id: "srt-pull",     label: "SRT pull",     desc: "Connect to a remote SRT source",          icon: Cast },
@@ -265,9 +265,26 @@ export default function StreamWizard({ initial, onClose, onSaved, onDeleted }) {
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState(null);
 
   const url = useMemo(() => build(typeId, fields), [typeId, fields]);
   const setF = (k, v) => setFields((s) => ({ ...s, [k]: v }));
+
+  // Reset test result when URL changes
+  useEffect(() => { setTestResult(null); }, [url]);
+
+  const testSource = async () => {
+    if (!url) { setTestResult({ ok: false, message: "Source URL is empty" }); return; }
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const { data } = await api.post("/streams/test-source", { url });
+      setTestResult(data);
+    } catch (e2) {
+      setTestResult({ ok: false, message: e2?.response?.data?.detail || e2.message || "Test failed" });
+    } finally { setTesting(false); }
+  };
 
   const submit = async (e) => {
     e.preventDefault();
@@ -371,6 +388,43 @@ export default function StreamWizard({ initial, onClose, onSaved, onDeleted }) {
           {/* Type-specific fields */}
           <div className="cell-flat rounded-lg p-4 mb-5 bg-[var(--surface-2)] border border-[var(--border)]">
             <Fields typeId={typeId} fields={fields} set={setF} />
+
+            {/* Test source button + result */}
+            {typeId !== "srt-listen" && typeId !== "rtmp-publish" && (
+              <div className="mt-3 pt-3 border-t border-[var(--border)]" data-testid="stream-form-test-source-block">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={testSource}
+                    disabled={testing || !url}
+                    className="btn btn-secondary text-xs"
+                    data-testid="stream-form-test-source"
+                  >
+                    {testing
+                      ? <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> Testing…</>
+                      : <><Zap className="w-3.5 h-3.5 mr-1.5" /> Test source</>}
+                  </button>
+                  {url && (
+                    <span className="text-[11px] text-[var(--muted)] mono truncate max-w-[300px]" title={url}>{url}</span>
+                  )}
+                </div>
+                {testResult && (
+                  <div
+                    className={`mt-2 px-3 py-2 rounded-md text-xs flex items-center gap-2 border ${
+                      testResult.ok
+                        ? "bg-emerald-50 border-emerald-200 text-emerald-800"
+                        : "bg-red-50 border-red-200 text-red-800"
+                    }`}
+                    data-testid="stream-form-test-source-result"
+                  >
+                    {testResult.ok
+                      ? <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                      : <XCircle className="w-3.5 h-3.5 shrink-0" />}
+                    <span>{testResult.message}</span>
+                  </div>
+                )}
+              </div>
+            )}
 
             {(typeId === "srt-listen" || typeId === "rtmp-publish") && (
               <>

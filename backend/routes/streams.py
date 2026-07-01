@@ -1,10 +1,14 @@
 """Stream CRUD + push targets + outputs + live-stats endpoints."""
 from __future__ import annotations
 
+import asyncio
+import time
 from typing import Any
+from urllib.parse import urlparse
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 
 import flussonic
 from deps import get_current_user
@@ -12,6 +16,69 @@ from models import StreamIn, StreamPushIn, StreamUpdateIn, ToggleIn
 from scope import effective_streams
 
 router = APIRouter()
+
+
+# ---------- Test-source (reachability probe) ----------
+class TestSourceIn(BaseModel):
+    url: str
+
+
+_DEFAULT_PORT_BY_SCHEME = {"http": 80, "https": 443, "rtmp": 1935, "rtmps": 443, "rtsp": 554, "srt": 9999}
+
+
+async def _tcp_probe(host: str, port: int, timeout: float = 4.0) -> None:
+    """Open a TCP connection to host:port. Raises on failure."""
+    _, writer = await asyncio.wait_for(asyncio.open_connection(host, port), timeout=timeout)
+    writer.close()
+    try:
+        await writer.wait_closed()
+    except Exception:  # noqa: BLE001
+        pass
+
+
+@router.post("/streams/test-source")
+async def test_source(body: TestSourceIn, _=Depends(get_current_user)):
+    """Best-effort reachability check for a source URL — used by the Stream wizard."""
+    url = (body.url or "").strip()
+    if not url:
+        raise HTTPException(status_code=400, detail="URL is required")
+    if url.startswith(("publish://", "file://")):
+        return {"ok": True, "message": "Not testable — Flussonic will handle it locally.", "latency_ms": 0}
+    try:
+        parsed = urlparse(url)
+    except Exception:  # noqa: BLE001
+        return {"ok": False, "message": "Invalid URL", "latency_ms": 0}
+    scheme = (parsed.scheme or "").lower()
+    host = parsed.hostname or ""
+    if not host:
+        return {"ok": False, "message": "URL is missing a host", "latency_ms": 0}
+    port = parsed.port or _DEFAULT_PORT_BY_SCHEME.get(scheme)
+    if not port and scheme not in ("http", "https"):
+        return {"ok": False, "message": f"Unknown default port for scheme {scheme!r}", "latency_ms": 0}
+    started = time.monotonic()
+    try:
+        if scheme in ("http", "https"):
+            async with httpx.AsyncClient(timeout=5.0, follow_redirects=True) as c:
+                r = await c.get(url)
+                latency_ms = int((time.monotonic() - started) * 1000)
+                if r.status_code >= 400:
+                    return {"ok": False, "message": f"HTTP {r.status_code}", "latency_ms": latency_ms}
+                return {"ok": True, "message": f"HTTP {r.status_code} · {latency_ms} ms", "latency_ms": latency_ms}
+        if scheme == "udp":
+            return {"ok": True, "message": "UDP is connectionless — cannot verify from panel.", "latency_ms": 0}
+        # rtmp/rtmps/rtsp/srt — TCP socket probe (SRT usually UDP but Flussonic's SRT LISTEN opens TCP handshake first; if fails we still say maybe)
+        if scheme == "srt":
+            # SRT is UDP; TCP probe is unreliable. Report a hint rather than fail.
+            return {"ok": True, "message": "SRT uses UDP — reachability cannot be verified from the panel.", "latency_ms": 0}
+        await _tcp_probe(host, int(port))
+        latency_ms = int((time.monotonic() - started) * 1000)
+        return {"ok": True, "message": f"TCP {host}:{port} reachable · {latency_ms} ms", "latency_ms": latency_ms}
+    except asyncio.TimeoutError:
+        return {"ok": False, "message": f"Timeout connecting to {host}:{port}", "latency_ms": 5000}
+    except OSError as e:
+        return {"ok": False, "message": f"Cannot reach {host}:{port} — {e.__class__.__name__}", "latency_ms": 0}
+    except httpx.RequestError as e:
+        return {"ok": False, "message": f"Request failed: {e.__class__.__name__}", "latency_ms": 0}
 
 
 # ---------- Stream CRUD ----------

@@ -150,6 +150,14 @@ User wants a web admin panel for the Flussonic Media Server API. Confirmed via c
 - Webhooks / SSE push for sessions instead of polling
 
 ## What's Been Implemented (2026-07-01)
+- ✅ **"Test source" button in Stream Wizard** — new `POST /api/streams/test-source` endpoint runs a best-effort reachability probe:
+  - `http(s)://` → real GET with 5s timeout, reports status + latency
+  - `rtmp/rtmps/rtsp://` → TCP socket probe (default ports 1935/443/554), reports latency
+  - `srt://` → advisory message (UDP not testable)
+  - `udp://`, `publish://`, `file://` → skipped with clear message
+  - DNS failures / timeouts / connection refused → red "Cannot reach" with class name
+  - Frontend: green ✓ / red ✗ pill next to the button + live URL preview. Auto-clears when the URL changes.
+- ✅ **Brand name changed to "amixpanel"** via `/api/branding` PATCH (stored in Mongo).
 - ✅ **Nginx source type in Stream Wizard** — New card "Nginx" alongside SRT/RTMP/HLS with a nginx-rtmp ⇄ nginx HLS toggle. Fields: host, port (default 1935 for rtmp / 80 for hls), app (default live/hls), stream key. Auto-builds `rtmp://host[:port]/app/key` or `http://host[:port]/app/key.m3u8` and posts it to Flussonic as the stream source. Verified UI end-to-end.
 - ✅ Secure embeddable HLS player (`/api/embed/{token}`) fully working:
   - Fixed 500 → now proxies `/{stream}/index.m3u8` from Flussonic host (base URL only, bypassing `/streamer/api/v3` API path)
