@@ -150,6 +150,15 @@ User wants a web admin panel for the Flussonic Media Server API. Confirmed via c
 - Webhooks / SSE push for sessions instead of polling
 
 ## What's Been Implemented (2026-07-01)
+- ✅ **Swiss & High-Contrast redesign** applied globally via `frontend/src/index.css`:
+  - Fonts: Cabinet Grotesk (headings), IBM Plex Sans (UI), JetBrains Mono (data)
+  - Paleta pure white + ink #09090B + brand red #DC2626 (was blue)
+  - Radius 4px (from 12px/8px)
+  - Pills mono uppercase, cards flat sin shadows, focus rings rojo
+  - Grain pattern eliminado del body
+- ✅ **Semver installer versioning** — `/app/VERSION` file drives `make-release.sh`. New tarball is `amixpanel-1.0.0.tar.gz` (before: `amixpanel-2026.07.01-{gitsha}.tar.gz`). Fallback to `1.0.{git_commit_count}` when VERSION file is missing.
+- ✅ **Removed "Encoder in" tab** and all nginx-rtmp helper code (backend service + route + helper script + sudoers entry + firewall rule).
+- ✅ **Certbot ahora se instala SIEMPRE** en `install.sh` (no solo con `--domain`) para arreglar el `certbot: command not found` en producción.
 - ✅ **Bug fixes + wizard cleanup batch:**
   - **RTMP URLs siempre muestran el puerto** — `rtmp://host:1935/static/{name}` (antes se omitía cuando era 1935 default). Aplica a `RTMP pull` y `RTMP publish`.
   - **Nuevos campos HTTP port / HTTPS port** en `Settings → Connection` (default 80 / 443). Backend: `models.FlussonicConfigIn` + `flussonic.save_config` + `_active_config` + `get_public_config`. Se usan para armar URLs HLS con puerto explícito cuando no es 80/443.

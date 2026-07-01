@@ -22,7 +22,16 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -z "$VERSION" ]]; then
-  VERSION="$(date +%Y.%m.%d)-$(cd "$ROOT" && git rev-parse --short HEAD 2>/dev/null || echo 'local')"
+  # Prefer explicit semver from /VERSION at repo root — bump it manually or via CI.
+  if [[ -f "$ROOT/VERSION" ]]; then
+    VERSION="$(tr -d '[:space:]' < "$ROOT/VERSION")"
+  fi
+  # Fallback: derive semver-style from git commit count so users still get an
+  # incrementing value in dev environments where /VERSION is missing.
+  if [[ -z "$VERSION" ]]; then
+    COUNT="$(cd "$ROOT" && git rev-list --count HEAD 2>/dev/null || echo 0)"
+    VERSION="1.0.${COUNT}"
+  fi
 fi
 
 NAME="amixpanel-${VERSION}"
