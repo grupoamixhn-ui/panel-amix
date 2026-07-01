@@ -5,13 +5,15 @@ import BrandingSection from "../components/BrandingSection";
 import SslSection from "../components/SslSection";
 import UpdateSection from "../components/UpdateSection";
 import BackupSection from "../components/BackupSection";
-import { Zap, Cable, CheckCircle2, XCircle, Loader2, Trash2, Download, Copy, RefreshCw, Package, Users, AlertTriangle, Image as ImageIcon, ArrowUpCircle, ShieldCheck, BookOpen, Database } from "lucide-react";
+import NginxRtmpSection from "../components/NginxRtmpSection";
+import { Zap, Cable, CheckCircle2, XCircle, Loader2, Trash2, Download, Copy, RefreshCw, Package, Users, AlertTriangle, Image as ImageIcon, ArrowUpCircle, ShieldCheck, BookOpen, Database, Radio } from "lucide-react";
 
 const TABS = [
   { id: "branding",  label: "Branding",     icon: ImageIcon },
   { id: "updates",   label: "Updates",      icon: ArrowUpCircle },
   { id: "ssl",       label: "SSL",          icon: ShieldCheck },
   { id: "connection",label: "Connection",   icon: Cable },
+  { id: "encoder",   label: "Encoder in",   icon: Radio },
   { id: "backup",    label: "Backup",       icon: Database },
   { id: "installer", label: "Installer",    icon: Package },
   { id: "help",      label: "Reference",    icon: BookOpen },
@@ -242,6 +244,7 @@ export default function Settings() {
         {activeTab === "branding"   && <BrandingSection />}
         {activeTab === "updates"    && <UpdateSection />}
         {activeTab === "ssl"        && <SslSection />}
+        {activeTab === "encoder"    && <NginxRtmpSection />}
 
         {activeTab === "connection" && (
           <>

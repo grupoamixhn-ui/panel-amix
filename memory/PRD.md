@@ -150,6 +150,20 @@ User wants a web admin panel for the Flussonic Media Server API. Confirmed via c
 - Webhooks / SSE push for sessions instead of polling
 
 ## What's Been Implemented (2026-07-01)
+- ✅ **Encoder receiver (nginx-rtmp) — new Settings tab** for OBS/vMix/other RTMP encoders
+  - New helper script `install/amixpanel-install-nginx-rtmp.sh` (also copied to `/usr/local/bin/` by `install.sh` + sudoers entry)
+    - Installs nginx + rtmp module on Ubuntu/Debian/AlmaLinux/Rocky
+    - Writes `/etc/nginx/modules-enabled/60-amixpanel-rtmp.conf` (or `conf.d/…` fallback) with rtmp server on :1935, app `live`, HLS on `/var/www/hls`
+    - Adds an HTTP server block serving `/hls/{key}.m3u8`
+    - Opens tcp/1935 in UFW / firewalld automatically
+    - Idempotent
+  - Backend: `services/nginx_rtmp.py` + `routes/nginx_rtmp.py`:
+    - `GET /api/nginx-rtmp/status` → detects nginx binary, rtmp module (`nginx -V` grep + module .so), config presence, systemctl active, tcp/1935 listening
+    - `POST /api/nginx-rtmp/install` → runs helper in background, streams to log
+    - `GET /api/nginx-rtmp/log` → tail
+    - `POST /api/nginx-rtmp/urls` → returns OBS/vMix ready URLs (public IP via ipify) + Flussonic pull URL for the Nginx source card
+  - Frontend: `components/NginxRtmpSection.jsx` mounted as new tab **"Encoder in"** in Settings. Status pills, one-click Install button, live install log stream, copy-to-clipboard rows for OBS URL / Stream key / HLS output / Flussonic pull URL.
+  - Verified: backend endpoints return correct JSON on preview, UI renders with all 4 status checks + install form (screenshot).
 - ✅ **Global rename `flussonic-admin` → `amixpanel`** (all filesystem, service, and code references):
   - Service systemd: `flussonic-admin.service` → `amixpanel.service`
   - Directorios: `/opt/flussonic-admin` → `/opt/amixpanel`, `/var/lib/flussonic-admin` → `/var/lib/amixpanel`, `/etc/flussonic-admin` → `/etc/amixpanel`

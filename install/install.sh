@@ -457,6 +457,13 @@ if [[ -f "$SOURCE_DIR/install/amixpanel-install-flussonic.sh" ]]; then
   ok "Flussonic install helper installed → $FLUSSONIC_INSTALL_HELPER"
 fi
 
+# ---------- nginx-rtmp encoder receiver helper --------------------------------
+NGINX_RTMP_HELPER="/usr/local/bin/amixpanel-install-nginx-rtmp"
+if [[ -f "$SOURCE_DIR/install/amixpanel-install-nginx-rtmp.sh" ]]; then
+  install -m 0755 "$SOURCE_DIR/install/amixpanel-install-nginx-rtmp.sh" "$NGINX_RTMP_HELPER"
+  ok "nginx-rtmp installer helper installed → $NGINX_RTMP_HELPER"
+fi
+
 SUDOERS_FILE="/etc/sudoers.d/amixpanel"
 cat > "$SUDOERS_FILE" <<EOF
 # Allow the backend service to manage its own TLS cert and reload nginx without password.
@@ -466,6 +473,7 @@ $APP_USER ALL=(root) NOPASSWD: /usr/sbin/nginx -t
 $APP_USER ALL=(root) NOPASSWD: /usr/bin/certbot
 $APP_USER ALL=(root) NOPASSWD: $UPDATE_HELPER *
 $APP_USER ALL=(root) NOPASSWD: $FLUSSONIC_INSTALL_HELPER *
+$APP_USER ALL=(root) NOPASSWD: $NGINX_RTMP_HELPER *
 EOF
 chmod 440 "$SUDOERS_FILE"
 visudo -c -f "$SUDOERS_FILE" >/dev/null && ok "sudoers helper installed (SSL + panel updates)"
