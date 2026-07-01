@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
-  Activity, ArrowLeft, ChevronRight, Clock, Copy, Eye, Loader2, Pencil,
+  Activity, ArrowLeft, ChevronRight, Clock, Code2, Copy, Eye, Loader2, Pencil,
   Power, RefreshCw, Send, Trash2, Users, Video, Wifi,
 } from "lucide-react";
 import {
@@ -11,6 +11,7 @@ import {
 
 import api, { fmtBitrate } from "../api";
 import { useAuth } from "../auth";
+import EmbedCodeModal from "../components/EmbedCodeModal";
 import HlsPlayer from "../components/HlsPlayer";
 import OutputsModal from "../components/OutputsModal";
 import PushTargetsModal from "../components/PushTargetsModal";
@@ -58,6 +59,7 @@ export default function StreamDetail() {
   const [history, setHistory] = useState([]);
   const [err, setErr] = useState("");
   const [editOpen, setEditOpen] = useState(false);
+  const [embedOpen, setEmbedOpen] = useState(false);
   const [outputsModalOpen, setOutputsModalOpen] = useState(false);
   const [pushesModalOpen, setPushesModalOpen] = useState(false);
   const [busy, setBusy] = useState("");
@@ -217,6 +219,15 @@ export default function StreamDetail() {
               data-testid="reset-btn"
             >
               <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${busy === "reset" ? "animate-spin" : ""}`} /> Reset
+            </button>
+            <button
+              type="button"
+              onClick={() => setEmbedOpen(true)}
+              className="btn btn-secondary"
+              data-testid="embed-btn"
+              title="Get an iframe snippet to embed on a website — the real URL stays hidden"
+            >
+              <Code2 className="w-3.5 h-3.5 mr-1.5" /> Embed
             </button>
             {canManage && (
               <>
@@ -473,6 +484,12 @@ export default function StreamDetail() {
           streamName={name}
           onClose={() => setPushesModalOpen(false)}
           onChange={fetchAll}
+        />
+      )}
+      {embedOpen && (
+        <EmbedCodeModal
+          streamName={name}
+          onClose={() => setEmbedOpen(false)}
         />
       )}
     </>
