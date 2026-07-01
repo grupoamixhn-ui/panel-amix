@@ -156,7 +156,8 @@ if [[ "$PKG_FAMILY" == "deb" ]]; then
     ca-certificates curl gnupg lsb-release software-properties-common \
     nginx rsync openssl ufw \
     python3 python3-venv python3-pip python3-dev \
-    build-essential git
+    build-essential git \
+    certbot python3-certbot-nginx
 else
   # RHEL family (AlmaLinux/Rocky/RHEL/CentOS): enable EPEL + CRB/PowerTools so
   # certbot, python3-certbot-nginx and headers required by some pip wheels are
@@ -184,7 +185,8 @@ else
     ca-certificates curl gnupg2 \
     nginx rsync openssl firewalld policycoreutils-python-utils \
     $PY_PKG python3-pip \
-    gcc gcc-c++ make git redhat-rpm-config
+    gcc gcc-c++ make git redhat-rpm-config \
+    certbot python3-certbot-nginx
   # symlink python3.11 if available so the rest of the script can rely on it
   if command -v python3.11 >/dev/null; then ln -sf "$(command -v python3.11)" /usr/local/bin/python3.11; fi
 fi
@@ -457,13 +459,6 @@ if [[ -f "$SOURCE_DIR/install/amixpanel-install-flussonic.sh" ]]; then
   ok "Flussonic install helper installed → $FLUSSONIC_INSTALL_HELPER"
 fi
 
-# ---------- nginx-rtmp encoder receiver helper --------------------------------
-NGINX_RTMP_HELPER="/usr/local/bin/amixpanel-install-nginx-rtmp"
-if [[ -f "$SOURCE_DIR/install/amixpanel-install-nginx-rtmp.sh" ]]; then
-  install -m 0755 "$SOURCE_DIR/install/amixpanel-install-nginx-rtmp.sh" "$NGINX_RTMP_HELPER"
-  ok "nginx-rtmp installer helper installed → $NGINX_RTMP_HELPER"
-fi
-
 SUDOERS_FILE="/etc/sudoers.d/amixpanel"
 cat > "$SUDOERS_FILE" <<EOF
 # Allow the backend service to manage its own TLS cert and reload nginx without password.
@@ -473,7 +468,6 @@ $APP_USER ALL=(root) NOPASSWD: /usr/sbin/nginx -t
 $APP_USER ALL=(root) NOPASSWD: /usr/bin/certbot
 $APP_USER ALL=(root) NOPASSWD: $UPDATE_HELPER *
 $APP_USER ALL=(root) NOPASSWD: $FLUSSONIC_INSTALL_HELPER *
-$APP_USER ALL=(root) NOPASSWD: $NGINX_RTMP_HELPER *
 EOF
 chmod 440 "$SUDOERS_FILE"
 visudo -c -f "$SUDOERS_FILE" >/dev/null && ok "sudoers helper installed (SSL + panel updates)"
@@ -618,7 +612,6 @@ ok "nginx serving on port $LISTEN_PORT"
 if [[ "$PKG_FAMILY" == "deb" ]] && command -v ufw >/dev/null; then
   if ufw status | grep -q "Status: active"; then
     ufw allow "$LISTEN_PORT/tcp" >/dev/null || true
-    ufw allow 8082/tcp >/dev/null || true  # HLS delivery from nginx-rtmp (optional)
     if [[ -n "$DOMAIN" ]]; then
       ufw allow 80/tcp  >/dev/null || true   # certbot HTTP-01 challenge
       ufw allow 443/tcp >/dev/null || true
@@ -628,7 +621,6 @@ elif command -v firewall-cmd >/dev/null; then
   systemctl enable --now firewalld >/dev/null 2>&1 || true
   if systemctl is-active --quiet firewalld; then
     firewall-cmd --permanent --add-port="${LISTEN_PORT}/tcp" >/dev/null 2>&1 || true
-    firewall-cmd --permanent --add-port=8082/tcp >/dev/null 2>&1 || true  # HLS delivery
     if [[ -n "$DOMAIN" ]]; then
       firewall-cmd --permanent --add-service=http  >/dev/null 2>&1 || true
       firewall-cmd --permanent --add-service=https >/dev/null 2>&1 || true
