@@ -67,6 +67,25 @@ def _read_uptime() -> int:
         return 0
 
 
+def _read_disk() -> dict[str, Any]:
+    """Return total/used/free bytes for the root filesystem via shutil.disk_usage.
+
+    Using the root ('/') gives operators a meaningful "disk full soon" signal
+    even when Flussonic writes its DVR/HLS spool elsewhere. Extra mounts can
+    be added later if needed.
+    """
+    import shutil
+    out: dict[str, Any] = {"disk_total_bytes": 0, "disk_used_bytes": 0, "disk_free_bytes": 0, "disk_mount": "/"}
+    try:
+        u = shutil.disk_usage("/")
+        out["disk_total_bytes"] = int(u.total)
+        out["disk_used_bytes"] = int(u.used)
+        out["disk_free_bytes"] = int(u.free)
+    except OSError:
+        pass
+    return out
+
+
 async def get_server_hardware() -> dict[str, Any]:
     """Return hardware/runtime info for both the panel host and Flussonic.
 
@@ -75,6 +94,7 @@ async def get_server_hardware() -> dict[str, Any]:
     comes from /proc + platform, since the panel always runs on Linux."""
     cpu = _read_proc_cpu()
     mem = _read_proc_mem()
+    disk = _read_disk()
     uname = platform.uname()
     panel = {
         "hostname": uname.node,
@@ -86,6 +106,10 @@ async def get_server_hardware() -> dict[str, Any]:
         "cpu_threads": cpu["cpu_threads"],
         "ram_total_bytes": mem["ram_total_bytes"],
         "ram_available_bytes": mem["ram_available_bytes"],
+        "disk_total_bytes": disk["disk_total_bytes"],
+        "disk_used_bytes": disk["disk_used_bytes"],
+        "disk_free_bytes": disk["disk_free_bytes"],
+        "disk_mount": disk["disk_mount"],
         "uptime_s": _read_uptime(),
     }
 

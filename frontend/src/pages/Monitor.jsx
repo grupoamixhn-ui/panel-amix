@@ -131,6 +131,8 @@ function HardwareInfoCard({ hw }) {
     ? p.ram_total_bytes - p.ram_available_bytes
     : 0;
   const ramPct = p.ram_total_bytes ? (ramUsed / p.ram_total_bytes) * 100 : 0;
+  const diskPct = p.disk_total_bytes ? (p.disk_used_bytes / p.disk_total_bytes) * 100 : 0;
+  const diskColor = diskPct > 90 ? "text-red-600" : diskPct > 75 ? "text-amber-600" : "text-[var(--text)]";
 
   return (
     <div className="cell p-5" data-testid="hardware-info">
@@ -158,17 +160,39 @@ function HardwareInfoCard({ hw }) {
           value={p.ram_total_bytes ? `${fmtBytes(p.ram_total_bytes)} (${ramPct.toFixed(0)}% used)` : ""}
           testId="hw-ram"
         />
-        <HwItem icon={HardDrive} label="Kernel" value={p.kernel} testId="hw-kernel" />
+        <div data-testid="hw-disk">
+          <div className="label flex items-center gap-1.5 mb-1">
+            <HardDrive className="w-3.5 h-3.5" /> Disk ({p.disk_mount || "/"})
+          </div>
+          <div className={`mono text-sm ${diskColor}`}>
+            {p.disk_total_bytes
+              ? `${fmtBytes(p.disk_used_bytes)} / ${fmtBytes(p.disk_total_bytes)}`
+              : "—"}
+          </div>
+          {p.disk_total_bytes ? (
+            <div className="mt-1.5 h-1 rounded-sm bg-[var(--surface-3)] overflow-hidden">
+              <div
+                className={`h-full ${diskPct > 90 ? "bg-red-500" : diskPct > 75 ? "bg-amber-500" : "bg-[var(--text)]"}`}
+                style={{ width: `${Math.min(100, diskPct).toFixed(1)}%` }}
+                data-testid="hw-disk-bar"
+              />
+            </div>
+          ) : null}
+          {p.disk_total_bytes ? (
+            <div className="mono text-[10px] text-[var(--muted)] mt-1">
+              {diskPct.toFixed(1)}% · {fmtBytes(p.disk_free_bytes)} free
+            </div>
+          ) : null}
+        </div>
+        <HwItem icon={Server} label="Kernel" value={p.kernel} testId="hw-kernel" />
         <HwItem icon={Server} label="OS / Arch" value={p.os ? `${p.os} · ${p.arch}` : p.arch} mono={false} testId="hw-os" />
-        <HwItem
-          icon={Server}
-          label="Flussonic"
-          value={f.reachable
-            ? `${f.hostname || "—"}${f.uptime_s ? ` · up ${fmtUptime(f.uptime_s)}` : ""}`
-            : "unreachable"}
-          testId="hw-flussonic"
-        />
       </div>
+      {f.reachable && (
+        <div className="mt-4 pt-4 border-t border-[var(--border)] mono text-[11px] text-[var(--muted)]" data-testid="hw-flussonic-line">
+          Flussonic host: <span className="text-[var(--text)]">{f.hostname || "—"}</span>
+          {f.uptime_s ? <> · up <span className="text-[var(--text)]">{fmtUptime(f.uptime_s)}</span></> : null}
+        </div>
+      )}
     </div>
   );
 }
