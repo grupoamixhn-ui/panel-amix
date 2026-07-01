@@ -76,10 +76,17 @@ chown -R nginx:nginx "$HLS_DIR" 2>/dev/null || chown -R www-data:www-data "$HLS_
 KEYS_FILE="/etc/amixpanel/rtmp_keys.txt"
 [[ -f "$KEYS_FILE" ]] || { install -d -m 0755 /etc/amixpanel; : > "$KEYS_FILE"; chmod 0640 "$KEYS_FILE"; }
 
-RTMP_CONF="/etc/nginx/modules-enabled/60-amixpanel-rtmp.conf"
-# Debian/Ubuntu use modules-enabled; if that dir doesn't exist fall back to conf.d
-if [[ ! -d /etc/nginx/modules-enabled ]]; then
-  RTMP_CONF="/etc/nginx/conf.d/amixpanel-rtmp.conf"
+# The `rtmp {}` block must live at the TOP level of nginx.conf (not inside http {}).
+# Debian ships /etc/nginx/modules-enabled/ (top-level include). RHEL/AlmaLinux only
+# include /etc/nginx/conf.d/ from *inside* the http block, so we drop a dedicated
+# top-level include line into /etc/nginx/nginx.conf and store the rtmp block in
+# /etc/nginx/rtmp.conf. This works on both families.
+RTMP_CONF="/etc/nginx/rtmp.conf"
+NGINX_MAIN="/etc/nginx/nginx.conf"
+if ! grep -q "^include ${RTMP_CONF};" "$NGINX_MAIN"; then
+  # Insert AFTER the module load line (or at line 1 if none).
+  sed -i "1a include ${RTMP_CONF};" "$NGINX_MAIN"
+  log "added 'include ${RTMP_CONF};' to ${NGINX_MAIN}"
 fi
 
 cat > "$RTMP_CONF" <<EOF
@@ -109,12 +116,13 @@ rtmp {
 }
 EOF
 
-# Make sure the HTTP server serves HLS files
+# Make sure the HTTP server serves HLS files. Use port 8082 to avoid clashing
+# with certbot / the amixpanel panel nginx site.
 HTTP_CONF="/etc/nginx/conf.d/amixpanel-hls.conf"
 cat > "$HTTP_CONF" <<EOF
 # amixpanel-managed — HLS delivery for encoder streams
 server {
-    listen 80;
+    listen 8082;
     server_name _;
 
     location /hls/ {
@@ -156,5 +164,5 @@ PUB_IP="$(curl -s --max-time 3 https://api.ipify.org 2>/dev/null || hostname -I 
 printf "\n${C_BLD}${C_GRN}nginx-rtmp encoder ready.${C_RST}\n"
 printf "  OBS / vMix URL:  ${C_BLD}rtmp://%s:%s/%s${C_RST}\n" "$PUB_IP" "$RTMP_PORT" "$RTMP_APP"
 printf "  Stream key:      choose any (Flussonic will pull that key)\n"
-printf "  HLS output:      http://%s/hls/<streamkey>.m3u8\n" "$PUB_IP"
+printf "  HLS output:      http://%s:8082/hls/<streamkey>.m3u8\n" "$PUB_IP"
 printf "  Config file:     %s\n" "$RTMP_CONF"

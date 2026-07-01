@@ -21,6 +21,7 @@ import httpx
 INSTALL_HELPER = "/usr/local/bin/amixpanel-install-nginx-rtmp"
 LOG_PATH = Path(os.environ.get("NGINX_RTMP_LOG", "/tmp/amixpanel-nginx-rtmp.log"))
 RTMP_CONF_CANDIDATES = (
+    "/etc/nginx/rtmp.conf",
     "/etc/nginx/modules-enabled/60-amixpanel-rtmp.conf",
     "/etc/nginx/conf.d/amixpanel-rtmp.conf",
 )
@@ -141,6 +142,6 @@ async def connection_urls(port: int = 1935, app: str = "live", stream_key: str =
         "public_ip": public_ip,
         "obs_url": f"rtmp://{public_ip}:{port}/{app}",
         "stream_key": stream_key,
-        "hls_url": f"http://{public_ip}/hls/{stream_key}.m3u8",
+        "hls_url": f"http://{public_ip}:8082/hls/{stream_key}.m3u8",
         "flussonic_pull_url": f"rtmp://127.0.0.1:{port}/{app}/{stream_key}",
     }

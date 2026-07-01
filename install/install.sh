@@ -618,6 +618,7 @@ ok "nginx serving on port $LISTEN_PORT"
 if [[ "$PKG_FAMILY" == "deb" ]] && command -v ufw >/dev/null; then
   if ufw status | grep -q "Status: active"; then
     ufw allow "$LISTEN_PORT/tcp" >/dev/null || true
+    ufw allow 8082/tcp >/dev/null || true  # HLS delivery from nginx-rtmp (optional)
     if [[ -n "$DOMAIN" ]]; then
       ufw allow 80/tcp  >/dev/null || true   # certbot HTTP-01 challenge
       ufw allow 443/tcp >/dev/null || true
@@ -627,6 +628,7 @@ elif command -v firewall-cmd >/dev/null; then
   systemctl enable --now firewalld >/dev/null 2>&1 || true
   if systemctl is-active --quiet firewalld; then
     firewall-cmd --permanent --add-port="${LISTEN_PORT}/tcp" >/dev/null 2>&1 || true
+    firewall-cmd --permanent --add-port=8082/tcp >/dev/null 2>&1 || true  # HLS delivery
     if [[ -n "$DOMAIN" ]]; then
       firewall-cmd --permanent --add-service=http  >/dev/null 2>&1 || true
       firewall-cmd --permanent --add-service=https >/dev/null 2>&1 || true
