@@ -62,6 +62,9 @@ export default function StreamDetail() {
   const [pushesModalOpen, setPushesModalOpen] = useState(false);
   const [busy, setBusy] = useState("");
 
+  const [filterCountry, setFilterCountry] = useState("");
+  const [filterProtocol, setFilterProtocol] = useState("");
+
   const stopped = useRef(false);
 
   const fetchAll = useCallback(async () => {
@@ -338,46 +341,91 @@ export default function StreamDetail() {
           />
         </div>
 
-        {/* ---------- Geographic distribution of viewers ---------- */}
-        {sessions.length > 0 && <ViewersMap sessions={sessions} />}
+        {/* ---------- Viewers panel: map + table side-by-side ---------- */}
+        {sessions.length > 0 && (() => {
+          const uniqueCountries = Array.from(new Set(sessions.map((s) => (s.country || "").toUpperCase()).filter(Boolean))).sort();
+          const uniqueProtocols = Array.from(new Set(sessions.map((s) => (s.protocol || "").toUpperCase()).filter(Boolean))).sort();
+          const filtered = sessions.filter((s) => {
+            if (filterCountry && (s.country || "").toUpperCase() !== filterCountry) return false;
+            if (filterProtocol && (s.protocol || "").toUpperCase() !== filterProtocol) return false;
+            return true;
+          });
+          return (
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+              <ViewersMap sessions={filtered} />
 
-        {/* ---------- Active sessions table ---------- */}
-        {sessions.length > 0 && (
-          <div className="cell p-5" data-testid="sessions-table">
-            <div className="flex items-center justify-between mb-3">
-              <div className="label flex items-center gap-2"><Users className="w-3.5 h-3.5" /> Active viewers ({sessions.length})</div>
+              <div className="cell p-5" data-testid="sessions-table">
+                <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
+                  <div className="label flex items-center gap-2">
+                    <Users className="w-3.5 h-3.5" /> Active viewers ({filtered.length}{filtered.length !== sessions.length ? ` / ${sessions.length}` : ""})
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <select
+                      data-testid="filter-country"
+                      value={filterCountry}
+                      onChange={(e) => setFilterCountry(e.target.value)}
+                      className="text-xs mono px-2 py-1 rounded-md border border-[var(--border)] bg-[var(--surface)]"
+                      title="Filter by country"
+                    >
+                      <option value="">All countries</option>
+                      {uniqueCountries.map((c) => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                    <select
+                      data-testid="filter-protocol"
+                      value={filterProtocol}
+                      onChange={(e) => setFilterProtocol(e.target.value)}
+                      className="text-xs mono px-2 py-1 rounded-md border border-[var(--border)] bg-[var(--surface)]"
+                      title="Filter by protocol"
+                    >
+                      <option value="">All protocols</option>
+                      {uniqueProtocols.map((p) => <option key={p} value={p}>{p}</option>)}
+                    </select>
+                    {(filterCountry || filterProtocol) && (
+                      <button
+                        type="button"
+                        onClick={() => { setFilterCountry(""); setFilterProtocol(""); }}
+                        className="text-[11px] text-[var(--primary)] hover:underline"
+                        data-testid="filter-clear"
+                      >
+                        clear
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <div className="overflow-x-auto max-h-[420px] overflow-y-auto rounded-md border border-[var(--border)]">
+                  <table className="w-full text-xs">
+                    <thead className="text-[var(--muted)] border-b border-[var(--border)] sticky top-0 bg-[var(--surface)] z-10">
+                      <tr>
+                        <Th>IP</Th>
+                        <Th>Country</Th>
+                        <Th>Proto</Th>
+                        <Th>Bitrate</Th>
+                        <Th>Duration</Th>
+                      </tr>
+                    </thead>
+                    <tbody className="mono">
+                      {filtered.slice(0, 60).map((s, i) => (
+                        <tr key={`${s.ip || ""}-${i}`} className="border-b border-[var(--border)]/50 hover:bg-[var(--surface-2)]">
+                          <Td>{s.ip || "—"}</Td>
+                          <Td>{s.country || "—"}</Td>
+                          <Td>{(s.protocol || "—").toUpperCase()}</Td>
+                          <Td>{fmtBitrate(Number(s.bitrate) || 0)}</Td>
+                          <Td>{fmtUptime(s.duration)}</Td>
+                        </tr>
+                      ))}
+                      {filtered.length === 0 && (
+                        <tr><td colSpan={5} className="text-center py-6 text-[var(--muted)]">No viewers match the current filters.</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+                {filtered.length > 60 && (
+                  <div className="text-[11px] text-[var(--muted)] mt-2">Showing 60 of {filtered.length}. See Sessions page for full list.</div>
+                )}
+              </div>
             </div>
-            <div className="overflow-x-auto max-h-[480px] overflow-y-auto rounded-md border border-[var(--border)]">
-              <table className="w-full text-xs">
-                <thead className="text-[var(--muted)] border-b border-[var(--border)] sticky top-0 bg-[var(--surface)] z-10">
-                  <tr>
-                    <Th>IP</Th>
-                    <Th>Country</Th>
-                    <Th>Protocol</Th>
-                    <Th>Bitrate</Th>
-                    <Th>Bytes sent</Th>
-                    <Th>Duration</Th>
-                  </tr>
-                </thead>
-                <tbody className="mono">
-                  {sessions.slice(0, 30).map((s, i) => (
-                    <tr key={`${s.ip || ""}-${i}`} className="border-b border-[var(--border)]/50 hover:bg-[var(--surface-2)]">
-                      <Td>{s.ip || "—"}</Td>
-                      <Td>{s.country || "—"}</Td>
-                      <Td>{(s.protocol || "—").toUpperCase()}</Td>
-                      <Td>{fmtBitrate(Number(s.bitrate) || 0)}</Td>
-                      <Td>{fmtBytes(s.bytes_sent)}</Td>
-                      <Td>{fmtUptime(s.duration)}</Td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            {sessions.length > 30 && (
-              <div className="text-[11px] text-[var(--muted)] mt-2">Showing 30 of {sessions.length}. See Sessions page for full list.</div>
-            )}
-          </div>
-        )}
+          );
+        })()}
 
         {/* ---------- Push targets list ---------- */}
         {pushes.length > 0 && (
