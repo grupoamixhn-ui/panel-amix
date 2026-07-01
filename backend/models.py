@@ -57,6 +57,8 @@ class FlussonicConfigIn(BaseModel):
     srt_publish_port: int | None = None
     srt_play_port: int | None = None
     rtmp_port: int | None = None
+    http_port: int | None = None
+    https_port: int | None = None
     https: bool | None = None
 
 

@@ -150,6 +150,11 @@ User wants a web admin panel for the Flussonic Media Server API. Confirmed via c
 - Webhooks / SSE push for sessions instead of polling
 
 ## What's Been Implemented (2026-07-01)
+- ✅ **Bug fixes + wizard cleanup batch:**
+  - **RTMP URLs siempre muestran el puerto** — `rtmp://host:1935/static/{name}` (antes se omitía cuando era 1935 default). Aplica a `RTMP pull` y `RTMP publish`.
+  - **Nuevos campos HTTP port / HTTPS port** en `Settings → Connection` (default 80 / 443). Backend: `models.FlussonicConfigIn` + `flussonic.save_config` + `_active_config` + `get_public_config`. Se usan para armar URLs HLS con puerto explícito cuando no es 80/443.
+  - **Wizard "New stream" reducido a 5 tipos** por request del usuario: SRT receive, RTMP receive, HLS pull, File loop, Custom URL. Eliminados: SRT pull, RTMP pull, Nginx, UDP/RTP, RTSP camera.
+  - Verificado con screenshots + curl (backend API returns `http_port:80, https_port:443, rtmp_port:1935`, RTMP URLs con `:1935`).
 - ✅ **Encoder receiver (nginx-rtmp) — new Settings tab** for OBS/vMix/other RTMP encoders
   - New helper script `install/amixpanel-install-nginx-rtmp.sh` (also copied to `/usr/local/bin/` by `install.sh` + sudoers entry)
     - Installs nginx + rtmp module on Ubuntu/Debian/AlmaLinux/Rocky

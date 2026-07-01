@@ -57,6 +57,8 @@ export default function Settings() {
         srt_publish_port: c.data.srt_publish_port || c.data.srt_port || 3525,
         srt_play_port: c.data.srt_play_port || c.data.srt_port || 7865,
         rtmp_port: c.data.rtmp_port || 1935,
+        http_port: c.data.http_port || 80,
+        https_port: c.data.https_port || 443,
         https: c.data.https !== false,
       });
     }
@@ -179,6 +181,8 @@ export default function Settings() {
         srt_publish_port: Number(form.srt_publish_port) || 3525,
         srt_play_port: Number(form.srt_play_port) || 7865,
         rtmp_port: Number(form.rtmp_port) || 1935,
+        http_port: Number(form.http_port) || 80,
+        https_port: Number(form.https_port) || 443,
         https: !!form.https,
         password: form.password === "" && cfg?.has_password ? null : form.password,
       };
@@ -197,7 +201,7 @@ export default function Settings() {
     if (!window.confirm("Clear stored Flussonic connection settings?")) return;
     await api.post("/config/flussonic/clear");
     await loadAll();
-    setForm({ url: "", user: "", password: "", api_path: "", public_host: "", srt_port: 9998, srt_publish_port: 3525, srt_play_port: 7865, rtmp_port: 1935, https: true });
+    setForm({ url: "", user: "", password: "", api_path: "", public_host: "", srt_port: 9998, srt_publish_port: 3525, srt_play_port: 7865, rtmp_port: 1935, http_port: 80, https_port: 443, https: true });
     setTestResult(null);
     setTouched(false);
   };
@@ -356,6 +360,28 @@ export default function Settings() {
                   value={form.rtmp_port}
                   onChange={(e) => onField("rtmp_port", e.target.value)}
                   placeholder="1935"
+                  className="w-full px-3.5 py-2.5 text-sm mono"
+                />
+              </div>
+              <div className="col-span-3">
+                <label className="text-xs font-medium text-[var(--text-2)] block mb-1.5">HTTP port</label>
+                <input
+                  data-testid="config-http-port-input"
+                  type="number" min="1" max="65535"
+                  value={form.http_port}
+                  onChange={(e) => onField("http_port", e.target.value)}
+                  placeholder="80"
+                  className="w-full px-3.5 py-2.5 text-sm mono"
+                />
+              </div>
+              <div className="col-span-3">
+                <label className="text-xs font-medium text-[var(--text-2)] block mb-1.5">HTTPS port</label>
+                <input
+                  data-testid="config-https-port-input"
+                  type="number" min="1" max="65535"
+                  value={form.https_port}
+                  onChange={(e) => onField("https_port", e.target.value)}
+                  placeholder="443"
                   className="w-full px-3.5 py-2.5 text-sm mono"
                 />
               </div>

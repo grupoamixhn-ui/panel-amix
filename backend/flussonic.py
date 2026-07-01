@@ -57,6 +57,8 @@ async def _active_config() -> dict[str, Any]:
         "srt_publish_port": int(cfg.get("srt_publish_port") or legacy_srt),
         "srt_play_port": int(cfg.get("srt_play_port") or legacy_srt),
         "rtmp_port": int(cfg.get("rtmp_port") or 1935),
+        "http_port": int(cfg.get("http_port") or 80),
+        "https_port": int(cfg.get("https_port") or 443),
         "https": bool(cfg.get("https", True)),
     }
 
@@ -74,6 +76,8 @@ async def get_public_config() -> dict[str, Any]:
         "srt_publish_port": c["srt_publish_port"],
         "srt_play_port": c["srt_play_port"],
         "rtmp_port": c["rtmp_port"],
+        "http_port": c["http_port"],
+        "https_port": c["https_port"],
         "https": c["https"],
     }
 
@@ -83,6 +87,7 @@ async def save_config(
     api_path: str | None = None, public_host: str | None = None,
     srt_port: int | None = None, rtmp_port: int | None = None,
     srt_publish_port: int | None = None, srt_play_port: int | None = None,
+    http_port: int | None = None, https_port: int | None = None,
     https: bool | None = None,
 ) -> None:
     if _DB is None:
@@ -104,6 +109,10 @@ async def save_config(
         update["srt_play_port"] = int(srt_play_port)
     if rtmp_port is not None:
         update["rtmp_port"] = int(rtmp_port)
+    if http_port is not None:
+        update["http_port"] = int(http_port)
+    if https_port is not None:
+        update["https_port"] = int(https_port)
     if https is not None:
         update["https"] = bool(https)
     if password is not None:
@@ -973,7 +982,13 @@ async def stream_outputs(name: str) -> dict[str, Any]:
     rtmp_p = detected.get("rtmp_port") or cfg["rtmp_port"]
     srt_play_p = detected.get("srt_play_port") or cfg["srt_play_port"]
     srt_pub_p = detected.get("srt_publish_port") or cfg["srt_publish_port"]
-    rtmp_host = f"{host}:{rtmp_p}" if rtmp_p not in (1935,) else host
+    # Always show the RTMP port explicitly — many encoders don't assume :1935 by
+    # default, and operators want the port visible for troubleshooting.
+    rtmp_host = f"{host}:{rtmp_p}"
+    # HTTP/HTTPS public delivery ports (blank when default 80/443 for pretty URLs)
+    http_p = cfg["https_port"] if cfg["https"] else cfg["http_port"]
+    port_suffix = "" if http_p in (80, 443) else f":{http_p}"
+    hls_host = f"{host}{port_suffix}"
 
     # Fetch publish_password (if any) for this stream
     publish_password = ""
@@ -988,8 +1003,8 @@ async def stream_outputs(name: str) -> dict[str, Any]:
     return {
         "stream": name,
         "outputs": [
-            {"label": "HLS (.m3u8)", "protocol": "hls", "url": f"{scheme}://{host}/{name}/index.m3u8"},
-            {"label": "HLS Low-Latency", "protocol": "hls", "url": f"{scheme}://{host}/{name}/index_ll.m3u8"},
+            {"label": "HLS (.m3u8)", "protocol": "hls", "url": f"{scheme}://{hls_host}/{name}/index.m3u8"},
+            {"label": "HLS Low-Latency", "protocol": "hls", "url": f"{scheme}://{hls_host}/{name}/index_ll.m3u8"},
             {"label": "RTMP pull", "protocol": "rtmp", "url": f"rtmp://{rtmp_host}/static/{name}"},
             {
                 "label": "SRT pull (streamid)",

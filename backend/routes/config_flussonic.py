@@ -23,7 +23,9 @@ async def config_put(body: FlussonicConfigIn, user=Depends(get_current_user)):
         public_host=body.public_host, srt_port=body.srt_port,
         srt_publish_port=body.srt_publish_port,
         srt_play_port=body.srt_play_port,
-        rtmp_port=body.rtmp_port, https=body.https,
+        rtmp_port=body.rtmp_port,
+        http_port=body.http_port, https_port=body.https_port,
+        https=body.https,
     )
     return await flussonic.get_public_config()
 

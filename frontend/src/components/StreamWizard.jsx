@@ -3,14 +3,9 @@ import api from "../api";
 import { X, Radio, Tv2, Cast, Camera, Film, Globe, Wifi, Pencil, Trash2, Lock, Eye, EyeOff, Loader2, Zap, CheckCircle2, XCircle } from "lucide-react";
 
 const TYPES = [
-  { id: "srt-pull",     label: "SRT pull",     desc: "Connect to a remote SRT source",          icon: Cast },
   { id: "srt-listen",   label: "SRT receive",  desc: "Accept push from OBS / encoder",          icon: Wifi },
-  { id: "rtmp-pull",    label: "RTMP pull",    desc: "Read from a remote RTMP server",          icon: Radio },
   { id: "rtmp-publish", label: "RTMP receive", desc: "Receive push from OBS / encoder",         icon: Tv2 },
   { id: "hls-pull",     label: "HLS pull",     desc: "Re-stream a .m3u8 playlist",              icon: Globe },
-  { id: "nginx",        label: "Nginx",        desc: "Pull from nginx-rtmp or nginx HLS",       icon: Wifi },
-  { id: "udp",          label: "UDP / RTP",    desc: "Multicast / unicast MPEG-TS",             icon: Radio },
-  { id: "rtsp",         label: "RTSP camera",  desc: "IP camera or NVR",                        icon: Camera },
   { id: "file",         label: "File loop",    desc: "Loop a local MP4 / TS file",              icon: Film },
   { id: "custom",       label: "Custom URL",   desc: "Paste any URL Flussonic supports",        icon: Pencil },
 ];
