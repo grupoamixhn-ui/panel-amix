@@ -150,6 +150,7 @@ User wants a web admin panel for the Flussonic Media Server API. Confirmed via c
 - Webhooks / SSE push for sessions instead of polling
 
 ## What's Been Implemented (2026-07-01)
+- ✅ **Nginx source type in Stream Wizard** — New card "Nginx" alongside SRT/RTMP/HLS with a nginx-rtmp ⇄ nginx HLS toggle. Fields: host, port (default 1935 for rtmp / 80 for hls), app (default live/hls), stream key. Auto-builds `rtmp://host[:port]/app/key` or `http://host[:port]/app/key.m3u8` and posts it to Flussonic as the stream source. Verified UI end-to-end.
 - ✅ Secure embeddable HLS player (`/api/embed/{token}`) fully working:
   - Fixed 500 → now proxies `/{stream}/index.m3u8` from Flussonic host (base URL only, bypassing `/streamer/api/v3` API path)
   - Bumped httpx timeout to 30s (Flussonic cold-start can take 5-10s for the first playlist)

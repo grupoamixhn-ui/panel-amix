@@ -8,6 +8,7 @@ const TYPES = [
   { id: "rtmp-pull",    label: "RTMP pull",    desc: "Read from a remote RTMP server",          icon: Radio },
   { id: "rtmp-publish", label: "RTMP receive", desc: "Receive push from OBS / encoder",         icon: Tv2 },
   { id: "hls-pull",     label: "HLS pull",     desc: "Re-stream a .m3u8 playlist",              icon: Globe },
+  { id: "nginx",        label: "Nginx",        desc: "Pull from nginx-rtmp or nginx HLS",       icon: Wifi },
   { id: "udp",          label: "UDP / RTP",    desc: "Multicast / unicast MPEG-TS",             icon: Radio },
   { id: "rtsp",         label: "RTSP camera",  desc: "IP camera or NVR",                        icon: Camera },
   { id: "file",         label: "File loop",    desc: "Loop a local MP4 / TS file",              icon: Film },
@@ -31,6 +32,21 @@ function build(typeId, f) {
       return `publish://`;
     case "hls-pull":
       return f.url || "";
+    case "nginx": {
+      // Pull from an nginx-rtmp module (rtmp://) or nginx serving HLS (http://)
+      const host = f.host || "";
+      const app = (f.app || "live").replace(/^\/+|\/+$/g, "");
+      const key = (f.key || "").replace(/^\/+/, "");
+      if ((f.mode || "rtmp") === "hls") {
+        // nginx-rtmp HLS: http://nginx-host:port/hls/{key}.m3u8
+        const port = f.port ? `:${f.port}` : "";
+        const path = key ? `${app}/${key}.m3u8` : `${app}.m3u8`;
+        return `http://${host}${port}/${path}`;
+      }
+      // nginx-rtmp: rtmp://nginx-host[:port]/app/key
+      const port = f.port && String(f.port) !== "1935" ? `:${f.port}` : "";
+      return `rtmp://${host}${port}/${app}${key ? `/${key}` : ""}`;
+    }
     case "udp":
       return `udp://${f.host || "239.0.0.10"}:${f.port || 1234}`;
     case "rtsp":
@@ -89,6 +105,41 @@ function Fields({ typeId, fields, set }) {
           <input className={i} value={fields.url || ""} onChange={(e) => set("url", e.target.value)} placeholder="https://origin.example.com/master.m3u8" />
         </div>
       );
+    case "nginx": {
+      const mode = fields.mode || "rtmp";
+      return (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <Label l="Nginx protocol" />
+            <div className="flex rounded-md border border-[var(--border)] overflow-hidden" data-testid="nginx-mode-toggle">
+              <button
+                type="button"
+                onClick={() => set("mode", "rtmp")}
+                className={`px-3 py-1.5 text-xs font-medium ${mode === "rtmp" ? "bg-[var(--primary)] text-white" : "bg-[var(--surface)] text-[var(--text-2)]"}`}
+                data-testid="nginx-mode-rtmp"
+              >nginx-rtmp</button>
+              <button
+                type="button"
+                onClick={() => set("mode", "hls")}
+                className={`px-3 py-1.5 text-xs font-medium ${mode === "hls" ? "bg-[var(--primary)] text-white" : "bg-[var(--surface)] text-[var(--text-2)]"}`}
+                data-testid="nginx-mode-hls"
+              >nginx HLS</button>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="col-span-2"><Label l="Nginx host" /><input className={i} value={fields.host || ""} onChange={(e) => set("host", e.target.value)} placeholder="nginx.example.com" data-testid="nginx-host" /></div>
+            <div><Label l="Port" /><input className={small} value={fields.port || ""} onChange={(e) => set("port", e.target.value)} placeholder={mode === "hls" ? "80" : "1935"} data-testid="nginx-port" /></div>
+            <div><Label l={mode === "hls" ? "App path" : "App"} /><input className={i} value={fields.app || ""} onChange={(e) => set("app", e.target.value)} placeholder={mode === "hls" ? "hls" : "live"} data-testid="nginx-app" /></div>
+            <div className="col-span-2"><Label l="Stream key" /><input className={i} value={fields.key || ""} onChange={(e) => set("key", e.target.value)} placeholder="mystream" data-testid="nginx-key" /></div>
+          </div>
+          <div className="px-3 py-2 rounded-lg bg-[var(--primary-soft)] border border-blue-100 text-xs text-[var(--text-2)] leading-relaxed">
+            {mode === "rtmp"
+              ? <>Flussonic will pull from your nginx-rtmp module — make sure <span className="mono">application {fields.app || "live"} &#123; live on; &#125;</span> is configured on your nginx.</>
+              : <>Flussonic will pull the HLS playlist served by nginx (typically the <span className="mono">/{fields.app || "hls"}/</span> location block).</>}
+          </div>
+        </div>
+      );
+    }
     case "udp":
       return (
         <div className="grid grid-cols-2 gap-3">
