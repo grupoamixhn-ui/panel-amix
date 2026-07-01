@@ -149,5 +149,13 @@ User wants a web admin panel for the Flussonic Media Server API. Confirmed via c
 - Audit log persisted in MongoDB
 - Webhooks / SSE push for sessions instead of polling
 
+## What's Been Implemented (2026-07-01)
+- ✅ Secure embeddable HLS player (`/api/embed/{token}`) fully working:
+  - Fixed 500 → now proxies `/{stream}/index.m3u8` from Flussonic host (base URL only, bypassing `/streamer/api/v3` API path)
+  - Bumped httpx timeout to 30s (Flussonic cold-start can take 5-10s for the first playlist)
+  - Graceful upstream failure handling: `httpx.TimeoutException` → 504, `httpx.RequestError` → 502 (no more raw 500s)
+  - Segment sub-playlists (`tracks-v1a1/mono.ts.m3u8`) also rewritten so viewers only ever hit `/api/embed/{token}/seg/{b64}`
+  - Verified end-to-end: playlist HTTP 200, sub-playlist HTTP 200, `.ts` segment HTTP 200 (2 MB delivered), iframe player renders with hls.js on `QhuboTv`
+
 ## Next Tasks
 - CDN Multi-server (Origin + Edges) — P1

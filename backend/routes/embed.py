@@ -122,39 +122,53 @@ async def embed_page(token: str):
     })
 
 
+def _upstream_client(cfg: dict, *, timeout: float = 30.0) -> httpx.AsyncClient:
+    """Build an httpx client pointed at the Flussonic media host (no api_path).
+
+    HLS delivery lives at `/{stream}/index.m3u8` on the streaming host itself
+    (not under `/streamer/api/v3`), so we intentionally keep the base URL only.
+    Uses a generous timeout because Flussonic may cold-start a stream and take
+    several seconds to produce the first playlist.
+    """
+    base = cfg["url"].rstrip("/")
+    return httpx.AsyncClient(base_url=base, timeout=timeout, follow_redirects=True)
+
+
 async def _proxy_stream(url: str, cfg: dict, *, media_type: str, rewrite_m3u8: bool = False, token: str = "") -> Response:
     """Fetch a URL from Flussonic and stream it back to the client.
 
     When `rewrite_m3u8` is True we rewrite the m3u8's segment URLs so viewers
     hit our own domain (segments are proxied through `/embed/{token}/seg/...`).
     """
-    async with flussonic._make_client(cfg) as c:  # noqa: SLF001
-        r = await c.get(url)
-        if r.status_code >= 400:
-            raise HTTPException(status_code=r.status_code, detail="Upstream error")
-        if not rewrite_m3u8:
-            return Response(content=r.content, media_type=media_type, headers={
-                "Cache-Control": "no-cache",
-                "Access-Control-Allow-Origin": "*",
-            })
-        text = r.text
-        # Rewrite each non-empty, non-comment line (segment / sub-playlist path)
-        rewritten_lines = []
-        for line in text.splitlines():
-            s = line.strip()
-            if not s or s.startswith("#"):
-                rewritten_lines.append(line)
-                continue
-            # `s` is a relative path — encode it so viewers can't see the real URL
-            path_b64 = secrets.token_urlsafe(1)  # placeholder — we use plain b64
-            import base64
-            path_b64 = base64.urlsafe_b64encode(s.encode()).decode().rstrip("=")
-            rewritten_lines.append(f"/api/embed/{token}/seg/{path_b64}")
-        return Response(
-            content="\n".join(rewritten_lines),
-            media_type="application/vnd.apple.mpegurl",
-            headers={"Cache-Control": "no-cache", "Access-Control-Allow-Origin": "*"},
-        )
+    try:
+        async with _upstream_client(cfg) as c:
+            r = await c.get(url)
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=504, detail="Upstream timeout")
+    except httpx.RequestError:
+        raise HTTPException(status_code=502, detail="Upstream unreachable")
+    if r.status_code >= 400:
+        raise HTTPException(status_code=502, detail=f"Upstream {r.status_code}")
+    if not rewrite_m3u8:
+        return Response(content=r.content, media_type=media_type, headers={
+            "Cache-Control": "no-cache",
+            "Access-Control-Allow-Origin": "*",
+        })
+    import base64
+    rewritten_lines = []
+    for line in r.text.splitlines():
+        s = line.strip()
+        if not s or s.startswith("#"):
+            rewritten_lines.append(line)
+            continue
+        # `s` is a relative path — encode it so viewers can't see the real URL
+        path_b64 = base64.urlsafe_b64encode(s.encode()).decode().rstrip("=")
+        rewritten_lines.append(f"/api/embed/{token}/seg/{path_b64}")
+    return Response(
+        content="\n".join(rewritten_lines),
+        media_type="application/vnd.apple.mpegurl",
+        headers={"Cache-Control": "no-cache", "Access-Control-Allow-Origin": "*"},
+    )
 
 
 @router.get("/embed/{token}/playlist.m3u8", include_in_schema=False)
@@ -189,33 +203,36 @@ async def embed_segment(token: str, blob: str):
         raise HTTPException(status_code=400, detail="Bad segment path")
     stream = doc["stream"]
     cfg = await flussonic._active_config()  # noqa: SLF001
-    # If rel starts with a query, it's likely a segment reference on the current
-    # HLS variant directory (e.g. `mono_00.ts?token=…`). Combine with stream root.
     upstream = f"/{stream}/{rel}"
-    async with flussonic._make_client(cfg) as c:  # noqa: SLF001
-        r = await c.get(upstream)
-        if r.status_code >= 400:
-            raise HTTPException(status_code=r.status_code, detail="Upstream error")
-        # Determine content type
-        ct = r.headers.get("content-type") or ("application/vnd.apple.mpegurl" if rel.endswith(".m3u8") else "video/mp2t")
-        # If this is a sub-playlist, we also need to rewrite it
-        if ct.startswith("application/vnd.apple.mpegurl") or rel.endswith(".m3u8"):
-            text = r.text
-            import base64 as _b64
-            lines = []
-            for line in text.splitlines():
-                s = line.strip()
-                if not s or s.startswith("#"):
-                    lines.append(line)
-                    continue
-                b = _b64.urlsafe_b64encode(s.encode()).decode().rstrip("=")
-                lines.append(f"/api/embed/{token}/seg/{b}")
-            return Response(
-                content="\n".join(lines),
-                media_type="application/vnd.apple.mpegurl",
-                headers={"Cache-Control": "no-cache", "Access-Control-Allow-Origin": "*"},
-            )
-        return Response(content=r.content, media_type=ct, headers={
-            "Access-Control-Allow-Origin": "*",
-            "Cache-Control": "public, max-age=6",
-        })
+    # .ts segments are small — short timeout OK; sub-playlists may cold-start.
+    is_playlist = rel.endswith(".m3u8")
+    try:
+        async with _upstream_client(cfg, timeout=30.0 if is_playlist else 15.0) as c:
+            r = await c.get(upstream)
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=504, detail="Upstream timeout")
+    except httpx.RequestError:
+        raise HTTPException(status_code=502, detail="Upstream unreachable")
+    if r.status_code >= 400:
+        raise HTTPException(status_code=502, detail=f"Upstream {r.status_code}")
+    ct = r.headers.get("content-type") or ("application/vnd.apple.mpegurl" if is_playlist else "video/mp2t")
+    # If this is a sub-playlist, we also need to rewrite it
+    if ct.startswith("application/vnd.apple.mpegurl") or is_playlist:
+        import base64 as _b64
+        lines = []
+        for line in r.text.splitlines():
+            s = line.strip()
+            if not s or s.startswith("#"):
+                lines.append(line)
+                continue
+            b = _b64.urlsafe_b64encode(s.encode()).decode().rstrip("=")
+            lines.append(f"/api/embed/{token}/seg/{b}")
+        return Response(
+            content="\n".join(lines),
+            media_type="application/vnd.apple.mpegurl",
+            headers={"Cache-Control": "no-cache", "Access-Control-Allow-Origin": "*"},
+        )
+    return Response(content=r.content, media_type=ct, headers={
+        "Access-Control-Allow-Origin": "*",
+        "Cache-Control": "public, max-age=6",
+    })
