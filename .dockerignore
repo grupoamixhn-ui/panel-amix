@@ -19,8 +19,10 @@ frontend/build/
 frontend/.cache/
 
 # Local env files (image builds from .env.example via env vars at runtime)
-**/.env
 **/.env.local
+**/.env.*.local
+!backend/.env
+!frontend/.env
 
 # Build artifacts & previous releases
 dist/
