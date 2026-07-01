@@ -27,8 +27,8 @@ jobs:
             VERSION="$(date +%Y.%m.%d)-${GITHUB_SHA::7}"
           fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "name=flussonic-admin-${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "tarball=flussonic-admin-${VERSION}.tar.gz" >> "$GITHUB_OUTPUT"
+          echo "name=amixpanel-${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tarball=amixpanel-${VERSION}.tar.gz" >> "$GITHUB_OUTPUT"
 
       - name: Build tarball
         run: |
@@ -44,7 +44,7 @@ jobs:
           echo "sha256=$SHA" >> "$GITHUB_OUTPUT"
           echo "size=$SIZE" >> "$GITHUB_OUTPUT"
           {
-            echo "## Flussonic Admin Panel — ${{ steps.ver.outputs.version }}"
+            echo "## amixpanel — ${{ steps.ver.outputs.version }}"
             echo ""
             echo "Self-hosted release tarball ready for any Ubuntu / Debian / AlmaLinux / Rocky VPS."
             echo ""
@@ -57,8 +57,8 @@ jobs:
             echo "### Quick install"
             echo ""
             echo '```bash'
-            echo "curl -fsSL https://github.com/${{ github.repository }}/releases/download/v${{ steps.ver.outputs.version }}/${{ steps.ver.outputs.tarball }} -o /tmp/flussonic-admin.tar.gz"
-            echo "cd /tmp && tar xzf flussonic-admin.tar.gz && cd ${{ steps.ver.outputs.name }}"
+            echo "curl -fsSL https://github.com/${{ github.repository }}/releases/download/v${{ steps.ver.outputs.version }}/${{ steps.ver.outputs.tarball }} -o /tmp/amixpanel.tar.gz"
+            echo "cd /tmp && tar xzf amixpanel.tar.gz && cd ${{ steps.ver.outputs.name }}"
             echo "sudo bash install/install.sh"
             echo '```'
           } > /tmp/release-notes.md

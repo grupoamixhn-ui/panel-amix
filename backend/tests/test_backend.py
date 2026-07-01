@@ -1,4 +1,4 @@
-"""Backend API tests for Flussonic Admin Panel."""
+"""Backend API tests for amixpanel."""
 import os
 import uuid
 import pytest

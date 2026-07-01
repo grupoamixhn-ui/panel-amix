@@ -1,19 +1,19 @@
 #!/usr/bin/env bash
 # ==============================================================================
-#  flussonic-admin-install-flussonic
+#  amixpanel-install-flussonic
 #
 #  Runs the official Flussonic Media Server installer in a way that the panel
 #  can invoke through sudoers — without granting the panel user blanket root.
 #
-#  Usage:   sudo flussonic-admin-install-flussonic <INSTALL_URL> [LICENSE_KEY]
+#  Usage:   sudo amixpanel-install-flussonic <INSTALL_URL> [LICENSE_KEY]
 #  Where    INSTALL_URL defaults to https://flussonic.com/install.sh
-#  Status:  writes pid+status to /var/lib/flussonic-admin/install.{pid,status}
+#  Status:  writes pid+status to /var/lib/amixpanel/install.{pid,status}
 # ==============================================================================
 set -e
 
 INSTALL_URL="${1:-https://flussonic.com/install.sh}"
 LICENSE_KEY="${2:-}"
-STATE_DIR="/var/lib/flussonic-admin"
+STATE_DIR="/var/lib/amixpanel"
 mkdir -p "$STATE_DIR"
 
 # Verify HTTPS scheme — never pipe-to-shell anything that isn't HTTPS to a

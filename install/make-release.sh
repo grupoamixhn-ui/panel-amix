@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Build a distributable tarball of the Flussonic Admin Panel.
+# Build a distributable tarball of the amixpanel.
 #
 # Usage:
-#   bash install/make-release.sh                 # → ./dist/flussonic-admin-<ver>.tar.gz
+#   bash install/make-release.sh                 # → ./dist/amixpanel-<ver>.tar.gz
 #   bash install/make-release.sh --version 1.2.0
 #   bash install/make-release.sh --out /tmp      # custom output dir
 set -euo pipefail
@@ -25,7 +25,7 @@ if [[ -z "$VERSION" ]]; then
   VERSION="$(date +%Y.%m.%d)-$(cd "$ROOT" && git rev-parse --short HEAD 2>/dev/null || echo 'local')"
 fi
 
-NAME="flussonic-admin-${VERSION}"
+NAME="amixpanel-${VERSION}"
 mkdir -p "$OUT"
 
 # ---------- validate bash scripts before packaging ---------------------------
@@ -34,8 +34,8 @@ SCRIPTS=(
   "$ROOT/install/install.sh"
   "$ROOT/install/make-release.sh"
 )
-[[ -f "$ROOT/install/flussonic-admin-update.sh" ]]         && SCRIPTS+=("$ROOT/install/flussonic-admin-update.sh")
-[[ -f "$ROOT/install/flussonic-admin-reset-password.sh" ]] && SCRIPTS+=("$ROOT/install/flussonic-admin-reset-password.sh")
+[[ -f "$ROOT/install/amixpanel-update.sh" ]]         && SCRIPTS+=("$ROOT/install/amixpanel-update.sh")
+[[ -f "$ROOT/install/amixpanel-reset-password.sh" ]] && SCRIPTS+=("$ROOT/install/amixpanel-reset-password.sh")
 for s in "${SCRIPTS[@]}"; do
   bash -n "$s" || { echo "✗ syntax error in $s" >&2; exit 1; }
 done
@@ -67,7 +67,7 @@ rsync -a --delete \
 
 # Top-level README pointing at install/
 cat > "$TMP/$NAME/README.md" <<EOF
-# Flussonic Admin Panel — $VERSION
+# amixpanel — $VERSION
 
 Self-hosted admin panel for Flussonic Media Server.
 

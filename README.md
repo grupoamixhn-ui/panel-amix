@@ -1,4 +1,4 @@
-# Flussonic Admin Panel
+# amixpanel
 
 > A modern, multi-tenant control plane for **Flussonic Media Server** — built
 > as a NOC dashboard for streaming engineers, resellers and platform admins.
@@ -31,8 +31,8 @@ VPS with a single bash installer.
 ## 🚀 One-command install on your VPS
 
 ```bash
-curl -fsSL https://YOUR-PANEL/api/download/installer -o /tmp/flussonic-admin.tar.gz
-cd /tmp && tar xzf flussonic-admin.tar.gz && cd flussonic-admin-*
+curl -fsSL https://YOUR-PANEL/api/download/installer -o /tmp/amixpanel.tar.gz
+cd /tmp && tar xzf amixpanel.tar.gz && cd amixpanel-*
 sudo bash install/install.sh
 ```
 

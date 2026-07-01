@@ -23,7 +23,7 @@ function applyBrandColors({ primary_color, primary_hover, primary_soft }) {
 // Update the browser-tab favicon + document title from the uploaded brand
 // assets, so the deployed panel can be re-skinned without rebuilding the app.
 function applyBrandTab({ logo_data_uri, favicon_data_uri, brand_name, tagline }) {
-  const name = (brand_name || "").trim() || "Flussonic Admin";
+  const name = (brand_name || "").trim() || "amixpanel";
   document.title = tagline ? `${name} · ${tagline}` : name;
 
   // Prefer a dedicated favicon upload; fall back to the logo.

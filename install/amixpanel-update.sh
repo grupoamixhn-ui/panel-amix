@@ -1,22 +1,22 @@
 #!/usr/bin/env bash
 # ==============================================================================
-#  Flussonic Admin — update helper (runs as root via sudoers)
+#  amixpanel — update helper (runs as root via sudoers)
 #
 #  Invoked by the backend API to apply panel updates from an uploaded tarball.
 #
 #  Modes:
-#    flussonic-admin-update quick    <tarball>   # replace backend/+frontend/build/, restart
-#    flussonic-admin-update full     <tarball>   # full reinstall via install.sh
-#    flussonic-admin-update rollback             # restore previous backup
-#    flussonic-admin-update version              # print current /opt VERSION
+#    amixpanel-update quick    <tarball>   # replace backend/+frontend/build/, restart
+#    amixpanel-update full     <tarball>   # full reinstall via install.sh
+#    amixpanel-update rollback             # restore previous backup
+#    amixpanel-update version              # print current /opt VERSION
 #
-#  Backups go to /opt/flussonic-admin.bak (single rolling backup).
+#  Backups go to /opt/amixpanel.bak (single rolling backup).
 # ==============================================================================
 set -euo pipefail
 
-APP_DIR="/opt/flussonic-admin"
-BAK_DIR="/opt/flussonic-admin.bak"
-SERVICE_NAME="flussonic-admin"
+APP_DIR="/opt/amixpanel"
+BAK_DIR="/opt/amixpanel.bak"
+SERVICE_NAME="amixpanel"
 
 die() { echo "ERR: $*" >&2; exit 1; }
 log() { echo "» $*"; }
@@ -44,7 +44,7 @@ extract_tarball() {
   local tarball="$1"
   local stage; stage="$(mktemp -d /tmp/flussonic-update.XXXXXX)"
   tar -xzf "$tarball" -C "$stage" || die "extract failed"
-  # tarball is wrapped in flussonic-admin-<version>/
+  # tarball is wrapped in amixpanel-<version>/
   local inner
   inner="$(find "$stage" -maxdepth 1 -mindepth 1 -type d | head -n1)"
   [[ -d "$inner/backend" && -d "$inner/frontend" ]] || die "invalid tarball — backend/+frontend/ not found"

@@ -22,8 +22,8 @@ from deps import get_current_user
 
 router = APIRouter()
 
-SSL_CERT_PATH = os.environ.get("SSL_CERT_PATH", "/etc/flussonic-admin/ssl/cert.pem")
-SSL_KEY_PATH = os.environ.get("SSL_KEY_PATH", "/etc/flussonic-admin/ssl/key.pem")
+SSL_CERT_PATH = os.environ.get("SSL_CERT_PATH", "/etc/amixpanel/ssl/cert.pem")
+SSL_KEY_PATH = os.environ.get("SSL_KEY_PATH", "/etc/amixpanel/ssl/key.pem")
 
 
 class SslUploadIn(BaseModel):
@@ -76,7 +76,7 @@ async def ssl_status(user=Depends(get_current_user)):
 async def ssl_upload(body: SslUploadIn, user=Depends(get_current_user)):
     """Replace the active certificate with user-provided PEM strings.
 
-    Falls back to the sudoers helper at /usr/local/bin/flussonic-admin-reload-ssl
+    Falls back to the sudoers helper at /usr/local/bin/amixpanel-reload-ssl
     when the backend lacks direct write access to SSL_CERT_PATH.
     """
     if user.get("role") != "admin":
@@ -111,7 +111,7 @@ async def ssl_upload(body: SslUploadIn, user=Depends(get_current_user)):
             shutil.copy2(tmp_key, SSL_KEY_PATH)
             os.chmod(SSL_KEY_PATH, 0o600)
         except PermissionError:
-            r = subprocess.run(["sudo", "-n", "/usr/local/bin/flussonic-admin-reload-ssl",
+            r = subprocess.run(["sudo", "-n", "/usr/local/bin/amixpanel-reload-ssl",
                                 tmp_cert, tmp_key], capture_output=True, text=True, timeout=15)
             if r.returncode != 0:
                 raise HTTPException(status_code=500,

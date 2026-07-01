@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Remove the Flussonic Admin Panel installed by install.sh
+# Remove the amixpanel installed by install.sh
 set -euo pipefail
 
-APP_DIR="/opt/flussonic-admin"
-APP_USER="flussonic-admin"
-SERVICE_NAME="flussonic-admin"
-NGINX_SITE_NAME="flussonic-admin"
+APP_DIR="/opt/amixpanel"
+APP_USER="amixpanel"
+SERVICE_NAME="amixpanel"
+NGINX_SITE_NAME="amixpanel"
 
 C_GRN=$'\033[32m'; C_YLW=$'\033[33m'; C_RST=$'\033[0m'
 

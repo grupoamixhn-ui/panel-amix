@@ -3,8 +3,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: flussonic-admin:latest
-    container_name: flussonic-admin
+    image: amixpanel:latest
+    container_name: amixpanel
     restart: unless-stopped
     ports:
       - "${PANEL_PORT:-80}:80"
@@ -28,7 +28,7 @@ services:
 
   mongo:
     image: mongo:7
-    container_name: flussonic-admin-mongo
+    container_name: amixpanel-mongo
     restart: unless-stopped
     volumes:
       - mongo-data:/data/db

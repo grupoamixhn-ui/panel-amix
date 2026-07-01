@@ -67,7 +67,7 @@ async def backup_export(user=Depends(require_admin)):
         payload["collections"][coll_name] = docs
 
     body = json.dumps(payload, ensure_ascii=False, indent=2)
-    filename = f"flussonic-admin-backup-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}.json"
+    filename = f"amixpanel-backup-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}.json"
     return Response(
         content=body,
         media_type="application/json",

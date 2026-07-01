@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-#  Flussonic Admin Panel — native installer
+#  amixpanel — native installer
 #  Supports: Ubuntu 22.04 / 24.04, Debian 11 / 12, AlmaLinux 8 / 9 / 10,
 #            RockyLinux 8 / 9 / 10, RHEL 8 / 9
 #
@@ -23,8 +23,8 @@
 #
 #  After install:
 #    Panel URL, admin credentials and service status are printed at the end.
-#    Logs:    journalctl -u flussonic-admin -f
-#    Restart: systemctl restart flussonic-admin
+#    Logs:    journalctl -u amixpanel -f
+#    Restart: systemctl restart amixpanel
 # ==============================================================================
 set -euo pipefail
 
@@ -37,9 +37,9 @@ die()    { printf "${C_RED}✗${C_RST} %s\n" "$*" >&2; exit 1; }
 title()  { printf "\n${C_BLD}%s${C_RST}\n%s\n" "$*" "$(printf '%.0s─' {1..60})"; }
 
 # ---------- defaults ----------------------------------------------------------
-APP_DIR="/opt/flussonic-admin"
-APP_USER="flussonic-admin"
-SERVICE_NAME="flussonic-admin"
+APP_DIR="/opt/amixpanel"
+APP_USER="amixpanel"
+SERVICE_NAME="amixpanel"
 DOMAIN=""
 LISTEN_PORT="8443"
 USE_SSL="1"            # 1 = self-signed cert; 0 = plain HTTP; "letsencrypt" = via certbot
@@ -107,6 +107,39 @@ case "$ID" in
 esac
 ARCH="$(uname -m)"
 log "Detected $PRETTY_NAME ($PKG_FAMILY/$ARCH)"
+
+# ---------- migrate from legacy flussonic-admin install ----------------------
+# If a previous install exists under /opt/flussonic-admin, move data to
+# /opt/amixpanel so existing users keep their DB, SSL certs and credentials.
+LEGACY_APP_DIR="/opt/flussonic-admin"
+LEGACY_SERVICE="flussonic-admin"
+if [[ -d "$LEGACY_APP_DIR" ]] || systemctl list-unit-files 2>/dev/null | grep -q "^${LEGACY_SERVICE}\.service"; then
+  title "Detected legacy '${LEGACY_SERVICE}' install — migrating to '${SERVICE_NAME}'"
+  # Stop and disable the old service so it can't clash with the new one.
+  if systemctl list-unit-files 2>/dev/null | grep -q "^${LEGACY_SERVICE}\.service"; then
+    systemctl stop "${LEGACY_SERVICE}" 2>/dev/null || true
+    systemctl disable "${LEGACY_SERVICE}" 2>/dev/null || true
+    rm -f "/etc/systemd/system/${LEGACY_SERVICE}.service"
+  fi
+  systemctl daemon-reload 2>/dev/null || true
+  # Move data dirs if the new locations don't already exist.
+  [[ -d "$LEGACY_APP_DIR" && ! -d "$APP_DIR" ]] && mv "$LEGACY_APP_DIR" "$APP_DIR" && log "Moved $LEGACY_APP_DIR → $APP_DIR"
+  [[ -d "/var/lib/flussonic-admin" && ! -d "/var/lib/amixpanel" ]] && mv "/var/lib/flussonic-admin" "/var/lib/amixpanel" && log "Moved /var/lib/flussonic-admin → /var/lib/amixpanel"
+  [[ -d "/etc/flussonic-admin" && ! -d "/etc/amixpanel" ]] && mv "/etc/flussonic-admin" "/etc/amixpanel" && log "Moved /etc/flussonic-admin → /etc/amixpanel"
+  # Old helper binaries — safe to remove, install.sh will rewrite them.
+  rm -f /usr/local/bin/flussonic-admin-update /usr/local/bin/flussonic-admin-reset-password \
+        /usr/local/bin/flussonic-admin-install-flussonic /usr/local/bin/flussonic-admin-reload-ssl \
+        /etc/sudoers.d/flussonic-admin
+  # Old nginx site
+  rm -f /etc/nginx/sites-enabled/flussonic-admin /etc/nginx/sites-available/flussonic-admin
+  # Old system user — keep uid, but rename to amixpanel via usermod if it exists and the new one doesn't
+  if id -u flussonic-admin >/dev/null 2>&1 && ! id -u amixpanel >/dev/null 2>&1; then
+    usermod -l amixpanel flussonic-admin 2>/dev/null || true
+    groupmod -n amixpanel flussonic-admin 2>/dev/null || true
+    log "Renamed system user flussonic-admin → amixpanel"
+  fi
+  log "Legacy install migrated. Continuing with fresh install of ${SERVICE_NAME}…"
+fi
 
 # ---------- pre-flight --------------------------------------------------------
 if [[ ! -d "$SOURCE_DIR/backend" ]] || [[ ! -d "$SOURCE_DIR/frontend" ]]; then
@@ -280,7 +313,7 @@ title "8/8  Configuring services"
 
 # Define SSL paths up-front so the backend .env can reference them even when
 # --no-ssl was passed (paths are still written; only used by Nginx when USE_SSL=1).
-SSL_CERT_DIR="/etc/flussonic-admin/ssl"
+SSL_CERT_DIR="/etc/amixpanel/ssl"
 SSL_CERT="$SSL_CERT_DIR/cert.pem"
 SSL_KEY="$SSL_CERT_DIR/key.pem"
 
@@ -317,7 +350,7 @@ chown -R "$APP_USER:$APP_USER" "$APP_DIR"
 # ---------- systemd unit ------------------------------------------------------
 cat > /etc/systemd/system/${SERVICE_NAME}.service <<EOF
 [Unit]
-Description=Flussonic Admin Panel — backend API
+Description=amixpanel — backend API
 After=network.target mongod.service
 Wants=mongod.service
 
@@ -333,7 +366,7 @@ RestartSec=3
 StandardOutput=journal
 StandardError=journal
 # hardening — relaxed so the backend can invoke its sudoers-allowed helpers
-# (flussonic-admin-ssl-helper, flussonic-admin-update, nginx -s reload, certbot).
+# (amixpanel-ssl-helper, amixpanel-update, nginx -s reload, certbot).
 # Setting NoNewPrivileges=yes here would block sudo from elevating to root.
 NoNewPrivileges=no
 ProtectSystem=no
@@ -341,9 +374,9 @@ ProtectHome=yes
 PrivateTmp=yes
 # Spool dir for update tarballs uploaded via the panel.
 RuntimeDirectoryMode=0750
-ReadWritePaths=$APP_DIR -/var/lib/flussonic-admin -/etc/letsencrypt
+ReadWritePaths=$APP_DIR -/var/lib/amixpanel -/etc/letsencrypt
 # systemd creates this dir automatically with the right owner (overrides for legacy installs)
-StateDirectory=flussonic-admin
+StateDirectory=amixpanel
 StateDirectoryMode=0750
 
 [Install]
@@ -353,8 +386,8 @@ EOF
 systemctl daemon-reload
 # Pre-create the state dirs (systemd will also create them via StateDirectory= but
 # legacy unit files won't have that directive — be defensive).
-install -d -o "$APP_USER" -g "$APP_USER" -m 0750 /var/lib/flussonic-admin
-install -d -o "$APP_USER" -g "$APP_USER" -m 0750 /var/lib/flussonic-admin/updates
+install -d -o "$APP_USER" -g "$APP_USER" -m 0750 /var/lib/amixpanel
+install -d -o "$APP_USER" -g "$APP_USER" -m 0750 /var/lib/amixpanel/updates
 systemctl enable --now ${SERVICE_NAME} >/dev/null
 sleep 2
 if ! systemctl is-active --quiet ${SERVICE_NAME}; then
@@ -385,7 +418,7 @@ if [[ "$USE_SSL" == "1" ]]; then
 fi
 
 # ---------- sudoers helper for SSL & nginx reload ----------------------------
-SSL_HELPER="/usr/local/bin/flussonic-admin-reload-ssl"
+SSL_HELPER="/usr/local/bin/amixpanel-reload-ssl"
 cat > "$SSL_HELPER" <<EOF
 #!/usr/bin/env bash
 # Helper that the panel calls (with sudo) to install a new cert + reload nginx.
@@ -401,30 +434,30 @@ chmod 755 "$SSL_HELPER"
 
 # Spool directory for update tarballs uploaded through the panel (also created
 # earlier near `systemctl enable --now` — kept here for idempotency on re-runs).
-install -d -o "$APP_USER" -g "$APP_USER" -m 0750 /var/lib/flussonic-admin/updates
+install -d -o "$APP_USER" -g "$APP_USER" -m 0750 /var/lib/amixpanel/updates
 
 # ---------- update helper (panel self-update via sudoers) --------------------
-UPDATE_HELPER="/usr/local/bin/flussonic-admin-update"
-if [[ -f "$SOURCE_DIR/install/flussonic-admin-update.sh" ]]; then
-  install -m 0755 "$SOURCE_DIR/install/flussonic-admin-update.sh" "$UPDATE_HELPER"
+UPDATE_HELPER="/usr/local/bin/amixpanel-update"
+if [[ -f "$SOURCE_DIR/install/amixpanel-update.sh" ]]; then
+  install -m 0755 "$SOURCE_DIR/install/amixpanel-update.sh" "$UPDATE_HELPER"
   ok "update helper installed → $UPDATE_HELPER"
 fi
 
 # ---------- password reset CLI helper (root-only, no sudoers needed) ----------
-RESET_HELPER="/usr/local/bin/flussonic-admin-reset-password"
-if [[ -f "$SOURCE_DIR/install/flussonic-admin-reset-password.sh" ]]; then
-  install -m 0750 -o root -g root "$SOURCE_DIR/install/flussonic-admin-reset-password.sh" "$RESET_HELPER"
+RESET_HELPER="/usr/local/bin/amixpanel-reset-password"
+if [[ -f "$SOURCE_DIR/install/amixpanel-reset-password.sh" ]]; then
+  install -m 0750 -o root -g root "$SOURCE_DIR/install/amixpanel-reset-password.sh" "$RESET_HELPER"
   ok "password reset CLI installed → $RESET_HELPER (run with sudo)"
 fi
 
 # ---------- Flussonic installer helper (panel-driven `Install Flussonic` btn) -
-FLUSSONIC_INSTALL_HELPER="/usr/local/bin/flussonic-admin-install-flussonic"
-if [[ -f "$SOURCE_DIR/install/flussonic-admin-install-flussonic.sh" ]]; then
-  install -m 0755 "$SOURCE_DIR/install/flussonic-admin-install-flussonic.sh" "$FLUSSONIC_INSTALL_HELPER"
+FLUSSONIC_INSTALL_HELPER="/usr/local/bin/amixpanel-install-flussonic"
+if [[ -f "$SOURCE_DIR/install/amixpanel-install-flussonic.sh" ]]; then
+  install -m 0755 "$SOURCE_DIR/install/amixpanel-install-flussonic.sh" "$FLUSSONIC_INSTALL_HELPER"
   ok "Flussonic install helper installed → $FLUSSONIC_INSTALL_HELPER"
 fi
 
-SUDOERS_FILE="/etc/sudoers.d/flussonic-admin"
+SUDOERS_FILE="/etc/sudoers.d/amixpanel"
 cat > "$SUDOERS_FILE" <<EOF
 # Allow the backend service to manage its own TLS cert and reload nginx without password.
 $APP_USER ALL=(root) NOPASSWD: $SSL_HELPER
@@ -443,7 +476,7 @@ if [[ -f "$SOURCE_DIR/VERSION" ]]; then
 fi
 
 # ---------- nginx site --------------------------------------------------------
-NGINX_SITE_NAME="flussonic-admin"
+NGINX_SITE_NAME="amixpanel"
 SERVER_NAME_LINE="server_name _;"
 [[ -n "$DOMAIN" ]] && SERVER_NAME_LINE="server_name $DOMAIN;"
 
@@ -619,7 +652,7 @@ fi
 cat <<EOF
 
 ${C_GRN}════════════════════════════════════════════════════════════════${C_RST}
-${C_GRN}${C_BLD}  Flussonic Admin Panel — install complete${C_RST}
+${C_GRN}${C_BLD}  amixpanel — install complete${C_RST}
 ${C_GRN}════════════════════════════════════════════════════════════════${C_RST}
 
   ${C_BLD}URL:${C_RST}       $PANEL_URL
@@ -636,7 +669,7 @@ else
 fi
 
 printf "\n  ${C_BLD}Forgot it later?${C_RST}  Run on this VPS:\n"
-printf "     ${C_BLD}sudo flussonic-admin-reset-password${C_RST}\n"
+printf "     ${C_BLD}sudo amixpanel-reset-password${C_RST}\n"
 
 cat <<EOF
 

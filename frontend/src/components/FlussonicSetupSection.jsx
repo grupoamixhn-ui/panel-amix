@@ -138,7 +138,7 @@ export default function FlussonicSetupSection() {
               Install Flussonic
             </button>
             <div className="text-[11px] text-[var(--muted)]">
-              Runs <code className="mono">sudo flussonic-admin-install-flussonic</code> which executes the
+              Runs <code className="mono">sudo amixpanel-install-flussonic</code> which executes the
               official installer from <span className="mono">https://flussonic.com/install.sh</span>.
             </div>
           </div>

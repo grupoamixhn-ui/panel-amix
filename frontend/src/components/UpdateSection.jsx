@@ -129,7 +129,7 @@ export default function UpdateSection() {
   };
 
   const rollback = async () => {
-    if (!window.confirm("Rollback to the previous backup? Current code will be swapped with /opt/flussonic-admin.bak.")) return;
+    if (!window.confirm("Rollback to the previous backup? Current code will be swapped with /opt/amixpanel.bak.")) return;
     setRolling(true);
     try {
       const r = await api.post("/updates/rollback");
@@ -191,7 +191,7 @@ export default function UpdateSection() {
           <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
           <div>
             <div className="font-semibold mb-0.5">Update helper not installed.</div>
-            Re-run <span className="mono">sudo bash install/install.sh</span> on the VPS to provision the helper at <span className="mono">/usr/local/bin/flussonic-admin-update</span>. Without it, Apply / Rollback are disabled.
+            Re-run <span className="mono">sudo bash install/install.sh</span> on the VPS to provision the helper at <span className="mono">/usr/local/bin/amixpanel-update</span>. Without it, Apply / Rollback are disabled.
           </div>
         </div>
       )}
@@ -236,7 +236,7 @@ export default function UpdateSection() {
                 data-testid="update-github-repo"
                 value={form.github_repo}
                 onChange={(e) => setForm({ ...form, github_repo: e.target.value })}
-                placeholder="myorg/flussonic-admin"
+                placeholder="myorg/amixpanel"
                 className="w-full px-3 py-2 text-sm mono"
               />
             </div>
@@ -267,7 +267,7 @@ export default function UpdateSection() {
               className="w-full px-3 py-2 text-sm mono"
             />
             <p className="text-[11px] text-[var(--muted)] mt-1.5">
-              Tip: point this at another Flussonic Admin panel’s <span className="mono">/api/download/installer/info</span>
+              Tip: point this at another amixpanel’s <span className="mono">/api/download/installer/info</span>
               {" "}to mirror its latest build automatically.
             </p>
           </div>
@@ -378,7 +378,7 @@ export default function UpdateSection() {
         <div className="pt-5 border-t border-[var(--border)]">
           <div className="label mb-2">Rollback</div>
           <p className="text-xs text-[var(--muted)] mb-2">
-            A backup of the previous installation is available at <span className="mono">/opt/flussonic-admin.bak</span>.
+            A backup of the previous installation is available at <span className="mono">/opt/amixpanel.bak</span>.
           </p>
           <button
             onClick={rollback}

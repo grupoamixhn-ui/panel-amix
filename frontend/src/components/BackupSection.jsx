@@ -37,7 +37,7 @@ export default function BackupSection() {
       const cd = res.headers?.["content-disposition"] || "";
       const m = /filename="?([^";]+)"?/i.exec(cd);
       const filename = m?.[1] ||
-        `flussonic-admin-backup-${new Date().toISOString().slice(0, 10)}.json`;
+        `amixpanel-backup-${new Date().toISOString().slice(0, 10)}.json`;
       const url = URL.createObjectURL(res.data);
       const a = document.createElement("a");
       a.href = url;

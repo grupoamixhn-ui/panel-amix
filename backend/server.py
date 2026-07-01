@@ -38,11 +38,11 @@ from routes import streams as streams_routes
 from routes import sub_users as sub_users_routes
 
 # ---------- Setup ----------
-app = FastAPI(title="Flussonic Admin API")
+app = FastAPI(title="amixpanel API")
 api = APIRouter(prefix="/api")
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-logger = logging.getLogger("flussonic-admin")
+logger = logging.getLogger("amixpanel")
 
 
 # ---------- Mount domain routers ----------
@@ -63,7 +63,7 @@ api.include_router(updates_module.build_router(require_admin))
 
 @api.get("/")
 async def root():
-    return {"service": "flussonic-admin-api", "status": "ok"}
+    return {"service": "amixpanel-api", "status": "ok"}
 
 
 app.include_router(api)

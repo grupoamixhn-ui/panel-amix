@@ -1,4 +1,4 @@
-# Flussonic Admin Panel — PRD
+# amixpanel — PRD
 
 ## Original Problem Statement
 > admin flussonic api
@@ -49,7 +49,7 @@ User wants a web admin panel for the Flussonic Media Server API. Confirmed via c
 - ✅ Real-time Monitor page (CPU, RAM, Bandwidth in/out, Viewers, Streams) with rolling 60-sample window, 3s refresh, graceful 404 handling for `/server` endpoint blocked by reverse proxy (2026-06-24)
 - ✅ Per-stream RTMP/SRT publish password (Flussonic `password` field). Wizard exposes "Publish password" with show/hide toggle; Outputs modal shows the `?password=` suffix + split Server/Stream Key for OBS. Update flow uses fetch-merge-PUT against Flussonic v3 (2026-06-24)
 - ✅ Reset button per stream (POST /api/streams/{name}/reset) — toggles Flussonic `disabled` False→True→False via fetch-merge-PUT, kicks current viewers and forces source reconnect. RBAC-gated by effective_streams. RotateCw icon button in Streams table with spinner + confirm dialog. Also refactored toggle_stream to use the same disabled-flag approach (the /restart, /stop POST endpoints don't exist in Flussonic 24.02) (2026-06-24)
-- ✅ Self-hosted installer for Ubuntu 22/24, Debian 11/12, AlmaLinux/Rocky 8/9 at `/app/install/`: install.sh (native deps + Python venv + React static build + MongoDB 7 + nginx reverse proxy + systemd unit `flussonic-admin` + optional Let's Encrypt via `--domain`), uninstall.sh, README.md. Idempotent re-runs preserve `.env` (JWT_SECRET, ADMIN_PASSWORD) and MongoDB data (2026-06-24)
+- ✅ Self-hosted installer for Ubuntu 22/24, Debian 11/12, AlmaLinux/Rocky 8/9 at `/app/install/`: install.sh (native deps + Python venv + React static build + MongoDB 7 + nginx reverse proxy + systemd unit `amixpanel` + optional Let's Encrypt via `--domain`), uninstall.sh, README.md. Idempotent re-runs preserve `.env` (JWT_SECRET, ADMIN_PASSWORD) and MongoDB data (2026-06-24)
 - ✅ Installer distribution via the deployed panel: 3 new endpoints (`GET /api/download/installer/info` public metadata + curl one-liner, `GET /api/download/installer` public tarball download, `POST /api/download/installer/rebuild` admin-only). Tarball built on-demand from `make-release.sh`, cached in `/app/dist/`. New "Self-hosted installer" card in Settings with Download button + copy-paste curl one-liner + SHA-256 + rebuild button (2026-06-24)
 - ✅ CPU/RAM monitor now reads from `/streamer/api/v3/config` (was 404 on `/server`); brand color picker + "Use logo colors" auto-extract in Branding settings; admin role can now create other admin users via /sub-users (2026-06-24)
 - ✅ Demo mode REMOVED entirely (backend + frontend); RTMP publish URL now uses Flussonic `/static/` application path; per-stream `max_bitrate_kbps` and `source_timeout` fields added to Stream wizard with server-wide max_sessions/client_timeout disclaimer (2026-06-24)
@@ -64,7 +64,7 @@ User wants a web admin panel for the Flussonic Media Server API. Confirmed via c
 - ✅ Client role now sees Sessions + Statistics pages, all data scoped to assigned `streams_allowed`. Backend `/server/info` and `/stats` filter KPIs by user scope (admin sees global; reseller/client sees only assigned). Verified: 3 assigned streams → 3 visible, 1 session shown, KPIs reflect scoped totals (2026-06-25)
 - ✅ Installer bug fix: `unbound variable SSL_CERT` in `install.sh` line 232 — moved `SSL_CERT_DIR/SSL_CERT/SSL_KEY` defs above the `.env` block so they're always defined under `set -u` (2026-06-25)
 - ✅ Removed hardcoded "GRUPO AMIX HN" from Login. Brand name + tagline now driven 100% by `/api/branding`. Dynamic favicon: uploaded `logo_data_uri` is applied as `<link rel="icon">`. `document.title = "{brand_name} · {tagline}"` (2026-06-25)
-- ✅ Self-update system: `/api/updates/{status,config,check,upload,apply,rollback}` endpoints + `UpdateSection.jsx` in Settings + sidebar badge "NEW" when update available. Sources: GitHub releases / Custom URL (mirrors any other panel's `/info` endpoint) / Manual upload / Disabled. Quick mode (replace backend+frontend, restart) and Full mode (re-run install.sh). Rollback restores `/opt/flussonic-admin.bak`. Helper script `flussonic-admin-update.sh` + sudoers entry installed by `install.sh`. Auto-check polling every N hours (default 6) (2026-06-25)
+- ✅ Self-update system: `/api/updates/{status,config,check,upload,apply,rollback}` endpoints + `UpdateSection.jsx` in Settings + sidebar badge "NEW" when update available. Sources: GitHub releases / Custom URL (mirrors any other panel's `/info` endpoint) / Manual upload / Disabled. Quick mode (replace backend+frontend, restart) and Full mode (re-run install.sh). Rollback restores `/opt/amixpanel.bak`. Helper script `amixpanel-update.sh` + sudoers entry installed by `install.sh`. Auto-check polling every N hours (default 6) (2026-06-25)
 - ✅ Universal cross-OS installer hardening (2026-06-26):
   - EPEL + CRB/PowerTools auto-enabled on RHEL family (AlmaLinux/Rocky/RHEL 8/9/10) so `certbot`, `python3-certbot-nginx` and pip-wheel build deps are available
   - `dnf module reset/disable nodejs` before NodeSource install — prevents conflicts with RHEL's bundled Node modules
@@ -73,7 +73,7 @@ User wants a web admin panel for the Flussonic Media Server API. Confirmed via c
   - MongoDB 7 RHEL repo now uses the actual major version (`rpm -E %rhel`) instead of `$releasever`, with RHEL 10→9 ABI fallback
   - Firewall opens port 80 (HTTP-01 challenge) when `--domain` is set, both ufw and firewalld branches
   - `make-release.sh` now runs `bash -n` + `shellcheck -S error` gate on all bash scripts before packaging — broken installers never ship
-  - Tarball regenerated: `/app/dist/flussonic-admin-2026.06.26-*.tar.gz`
+  - Tarball regenerated: `/app/dist/amixpanel-2026.06.26-*.tar.gz`
 - ✅ Real-time Monitor enhancements (2026-06-26):
   - Hardware & Runtime card on Monitor page exposing CPU model, cores/threads, total RAM (+ used %), kernel, OS/arch, Flussonic version + hostname + uptime. New `GET /api/server/hardware` endpoint reads `/proc/cpuinfo` + `/proc/meminfo` + `platform.uname()` for the panel host and Flussonic `/config` + `/server` for the streamer.
   - Combined "Bandwidth IN vs OUT" chart overlays both lines in a single panel below the split IN/OUT charts, plus a live `ratio = OUT/IN ×` indicator so operators can read cache amplification at a glance.
@@ -121,10 +121,10 @@ User wants a web admin panel for the Flussonic Media Server API. Confirmed via c
   - Verified live with stream `QhuboTv` on user's Flussonic — HLS plays, viewers=30, bitrate=3.93 Mbps, video=h264 1280×720 @ 29.97 fps, audio=aac 48000 Hz 2ch.
 - ✅ "Install Flussonic" + License Key management (2026-06-26):
   - New Settings → **Flussonic** tab with two cards: (1) Install Flussonic Media Server with optional license-key field + live log viewer streaming the installer's stdout in real time, (2) License Key card showing edition / valid-until / masked current key + input to save+push a new key.
-  - Backend: `services/flussonic_setup.py` runs the official installer (`/usr/local/bin/flussonic-admin-install-flussonic` via sudoers — only allows HTTPS URLs on the flussonic.com origin for safety). After install completes successfully, the panel auto-detects Flussonic on localhost and saves the connection config so the rest of the panel works without manual setup.
+  - Backend: `services/flussonic_setup.py` runs the official installer (`/usr/local/bin/amixpanel-install-flussonic` via sudoers — only allows HTTPS URLs on the flussonic.com origin for safety). After install completes successfully, the panel auto-detects Flussonic on localhost and saves the connection config so the rest of the panel works without manual setup.
   - License: stored in MongoDB `config.flussonic_license` and pushed to `PUT /streamer/api/v3/config` with `{"key": "..."}` so Flussonic hot-reloads.
   - 5 new admin-only endpoints: `GET /api/flussonic/detect`, `POST /api/flussonic/install`, `GET /api/flussonic/install/status`, `GET /api/flussonic/license`, `PUT /api/flussonic/license`.
-  - New helper script `install/flussonic-admin-install-flussonic.sh` + sudoers entry installed by `install.sh`. Tarball regenerated.
+  - New helper script `install/amixpanel-install-flussonic.sh` + sudoers entry installed by `install.sh`. Tarball regenerated.
 - ✅ Backend refactor — complete extraction of routes + service-layer split (2026-06-26):
   - `server.py` further reduced to **110 lines** (-90% from original 1097) — now only app setup, middleware, router mounts, startup/shutdown.
   - New `/app/backend/models.py` (82 ln): all Pydantic schemas (Login, Stream*, FlussonicConfig*, SubUser*).
@@ -150,6 +150,14 @@ User wants a web admin panel for the Flussonic Media Server API. Confirmed via c
 - Webhooks / SSE push for sessions instead of polling
 
 ## What's Been Implemented (2026-07-01)
+- ✅ **Global rename `flussonic-admin` → `amixpanel`** (all filesystem, service, and code references):
+  - Service systemd: `flussonic-admin.service` → `amixpanel.service`
+  - Directorios: `/opt/flussonic-admin` → `/opt/amixpanel`, `/var/lib/flussonic-admin` → `/var/lib/amixpanel`, `/etc/flussonic-admin` → `/etc/amixpanel`
+  - Helpers: `flussonic-admin-{update,reset-password,install-flussonic,reload-ssl}` → `amixpanel-*`
+  - Nginx site, sudoers, system user, cert-name, tarball, README, docker-compose, GitHub workflow, backend logger, FastAPI title, branding fallback
+  - **Auto-migration en `install.sh`**: detecta instalación previa con `flussonic-admin.service` → detiene el servicio, mueve `/opt`, `/var/lib`, `/etc` a las nuevas rutas, renombra el user con `usermod`, limpia helpers viejos y continúa el install normal. No pierde DB ni SSL.
+  - `DB_NAME=flussonic_admin` se preserva intencionalmente (no romper datos existentes)
+  - Verificado: backend restart OK, `/api/streams`, `/api/updates/status`, `/api/backup/info`, `/api/download/installer` todos HTTP 200. El tarball descargable ahora es `amixpanel-{version}.tar.gz`.
 - ✅ **"Test source" button in Stream Wizard** — new `POST /api/streams/test-source` endpoint runs a best-effort reachability probe:
   - `http(s)://` → real GET with 5s timeout, reports status + latency
   - `rtmp/rtmps/rtsp://` → TCP socket probe (default ports 1935/443/554), reports latency

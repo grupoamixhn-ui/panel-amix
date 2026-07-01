@@ -76,7 +76,7 @@ class TestInstallerInfo:
 
     def test_info_filename_pattern(self):
         body = requests.get(f"{API}/download/installer/info").json()
-        assert re.match(r"^flussonic-admin-\d.+\.tar\.gz$", body["filename"]), body["filename"]
+        assert re.match(r"^amixpanel-\d.+\.tar\.gz$", body["filename"]), body["filename"]
 
     def test_info_sha256_format(self):
         body = requests.get(f"{API}/download/installer/info").json()
@@ -129,7 +129,7 @@ class TestInstallerDownload:
         tf = tarfile.open(fileobj=io.BytesIO(r.content), mode="r:gz")
         try:
             names = tf.getnames()
-            # Strip the top dir (flussonic-admin-VERSION/) and check known files
+            # Strip the top dir (amixpanel-VERSION/) and check known files
             required_suffixes = [
                 "/install/install.sh",
                 "/install/uninstall.sh",
@@ -182,7 +182,7 @@ class TestInstallerRebuild:
         assert r.status_code == 200, f"rebuild failed: {r.status_code} {r.text}"
         body = r.json()
         assert body.get("ok") is True
-        assert body.get("filename", "").startswith("flussonic-admin-")
+        assert body.get("filename", "").startswith("amixpanel-")
         assert body.get("filename", "").endswith(".tar.gz")
         assert isinstance(body.get("size_bytes"), int) and body["size_bytes"] > 1000
 

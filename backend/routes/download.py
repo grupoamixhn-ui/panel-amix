@@ -21,7 +21,7 @@ from fastapi.responses import FileResponse
 from deps import get_current_user
 
 router = APIRouter()
-logger = logging.getLogger("flussonic-admin.download")
+logger = logging.getLogger("amixpanel.download")
 
 ROOT_DIR = Path(__file__).resolve().parent.parent  # /app/backend
 INSTALL_DIR = ROOT_DIR.parent / "install"
@@ -32,7 +32,7 @@ _release_build_lock = asyncio.Lock()
 async def _ensure_release_built() -> Path | None:
     """Return the newest tarball in dist/, building one on the fly if missing."""
     DIST_DIR.mkdir(parents=True, exist_ok=True)
-    candidates = sorted(DIST_DIR.glob("flussonic-admin-*.tar.gz"),
+    candidates = sorted(DIST_DIR.glob("amixpanel-*.tar.gz"),
                         key=lambda p: p.stat().st_mtime, reverse=True)
     if candidates:
         return candidates[0]
@@ -40,7 +40,7 @@ async def _ensure_release_built() -> Path | None:
     if not script.is_file():
         return None
     async with _release_build_lock:
-        candidates = sorted(DIST_DIR.glob("flussonic-admin-*.tar.gz"),
+        candidates = sorted(DIST_DIR.glob("amixpanel-*.tar.gz"),
                             key=lambda p: p.stat().st_mtime, reverse=True)
         if candidates:
             return candidates[0]
@@ -53,7 +53,7 @@ async def _ensure_release_built() -> Path | None:
             logger.error("make-release.sh failed (%s): %s",
                          proc.returncode, out.decode(errors="replace")[-500:])
             return None
-    candidates = sorted(DIST_DIR.glob("flussonic-admin-*.tar.gz"),
+    candidates = sorted(DIST_DIR.glob("amixpanel-*.tar.gz"),
                         key=lambda p: p.stat().st_mtime, reverse=True)
     return candidates[0] if candidates else None
 
@@ -73,7 +73,7 @@ async def download_installer_info(request: Request):
     inner_dir = tarball.name[:-len(".tar.gz")]
     return {
         "filename": tarball.name,
-        "version": inner_dir.replace("flussonic-admin-", ""),
+        "version": inner_dir.replace("amixpanel-", ""),
         "size_bytes": len(data),
         "sha256": sha,
         "download_url": public_url,
@@ -104,7 +104,7 @@ async def rebuild_installer(user=Depends(get_current_user)):
     if user.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Admin only")
     DIST_DIR.mkdir(parents=True, exist_ok=True)
-    for old in DIST_DIR.glob("flussonic-admin-*.tar.gz"):
+    for old in DIST_DIR.glob("amixpanel-*.tar.gz"):
         try:
             old.unlink()
         except OSError:

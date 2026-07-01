@@ -27,8 +27,8 @@ INSTALL_SCRIPT_URL = os.environ.get(
 )
 # Helper installed by install.sh + sudoers entry. We never run `curl | sudo sh`
 # directly from the Python process; instead the helper wraps the official command
-# and writes status to /var/lib/flussonic-admin/install.{status,pid}.
-INSTALLER_HELPER = "/usr/local/bin/flussonic-admin-install-flussonic"
+# and writes status to /var/lib/amixpanel/install.{status,pid}.
+INSTALLER_HELPER = "/usr/local/bin/amixpanel-install-flussonic"
 
 _state: dict[str, Any] = {
     "running": False,

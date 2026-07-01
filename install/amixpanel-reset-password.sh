@@ -1,22 +1,22 @@
 #!/usr/bin/env bash
 # ==============================================================================
-#  flussonic-admin-reset-password — reset (or create) the admin user
+#  amixpanel-reset-password — reset (or create) the admin user
 #
 #  Usage:
-#    sudo flussonic-admin-reset-password
-#    sudo flussonic-admin-reset-password admin@example.com NuevaPass123
-#    sudo flussonic-admin-reset-password admin@example.com           # prompts for password
+#    sudo amixpanel-reset-password
+#    sudo amixpanel-reset-password admin@example.com NuevaPass123
+#    sudo amixpanel-reset-password admin@example.com           # prompts for password
 #
 #  What it does:
-#    1. Updates ADMIN_EMAIL + ADMIN_PASSWORD in /opt/flussonic-admin/backend/.env
+#    1. Updates ADMIN_EMAIL + ADMIN_PASSWORD in /opt/amixpanel/backend/.env
 #    2. Rewrites the bcrypt hash in MongoDB so the change takes effect immediately
 #    3. Restarts the backend (idempotent re-seed on startup ensures consistency)
 # ==============================================================================
 set -euo pipefail
 
-APP_DIR="/opt/flussonic-admin"
+APP_DIR="/opt/amixpanel"
 ENV_FILE="$APP_DIR/backend/.env"
-SERVICE_NAME="flussonic-admin"
+SERVICE_NAME="amixpanel"
 
 die() { echo "ERR: $*" >&2; exit 1; }
 [[ "$(id -u)" == "0" ]] || die "Must run as root (try with sudo)."
@@ -60,12 +60,12 @@ echo "» Updating Mongo user document"
 ADMIN_EMAIL="$EMAIL" ADMIN_PASSWORD="$PASSWORD" \
 "$APP_DIR/backend/.venv/bin/python" - <<'PY'
 import asyncio, os, sys
-sys.path.insert(0, "/opt/flussonic-admin/backend")
+sys.path.insert(0, "/opt/amixpanel/backend")
 from datetime import datetime, timezone
 from motor.motor_asyncio import AsyncIOMotorClient
 from dotenv import dotenv_values
 
-env = dotenv_values("/opt/flussonic-admin/backend/.env")
+env = dotenv_values("/opt/amixpanel/backend/.env")
 mongo_url = env["MONGO_URL"]
 db_name = env["DB_NAME"]
 email = os.environ["ADMIN_EMAIL"].lower().strip()

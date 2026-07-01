@@ -1,10 +1,10 @@
-"""Self-update endpoints for the Flussonic Admin panel.
+"""Self-update endpoints for the amixpanel.
 
 Exposes:
 - GET  /api/updates/status         current version, source config, available version, last check
 - POST /api/updates/config         set source (github/url) + auto-check interval
 - POST /api/updates/check          force a "check for updates" against configured source
-- POST /api/updates/upload         admin uploads a .tar.gz to /var/lib/flussonic-admin/updates/
+- POST /api/updates/upload         admin uploads a .tar.gz to /var/lib/amixpanel/updates/
 - POST /api/updates/apply          apply pending update (mode=quick|full)
 - POST /api/updates/rollback       restore previous backup
 
@@ -29,12 +29,12 @@ import httpx
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel
 
-logger = logging.getLogger("flussonic-admin.updates")
+logger = logging.getLogger("amixpanel.updates")
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
-APP_DIR = Path("/opt/flussonic-admin")
-SPOOL_DIR = Path("/var/lib/flussonic-admin/updates")
-UPDATE_HELPER = "/usr/local/bin/flussonic-admin-update"
+APP_DIR = Path("/opt/amixpanel")
+SPOOL_DIR = Path("/var/lib/amixpanel/updates")
+UPDATE_HELPER = "/usr/local/bin/amixpanel-update"
 
 # Module-level state (kept in MongoDB too, this is the in-memory mirror)
 _db = None
@@ -68,7 +68,7 @@ async def _load_cfg() -> dict[str, Any]:
         "source_type": doc.get("source_type", "none"),     # github | url | upload | none
         "github_repo": doc.get("github_repo", ""),         # "owner/repo"
         "github_token": doc.get("github_token", ""),       # optional, for private repos
-        "custom_url": doc.get("custom_url", ""),           # https://.../flussonic-admin-*.tar.gz OR metadata endpoint
+        "custom_url": doc.get("custom_url", ""),           # https://.../amixpanel-*.tar.gz OR metadata endpoint
         "auto_check_hours": int(doc.get("auto_check_hours", 6)),
         "auto_check_enabled": bool(doc.get("auto_check_enabled", True)),
         "last_check": doc.get("last_check"),
@@ -106,7 +106,7 @@ async def _probe_github(cfg: dict[str, Any]) -> dict[str, Any]:
     repo = cfg.get("github_repo") or ""
     if "/" not in repo:
         raise ValueError("github_repo must be 'owner/repo'")
-    headers = {"Accept": "application/vnd.github+json", "User-Agent": "flussonic-admin"}
+    headers = {"Accept": "application/vnd.github+json", "User-Agent": "amixpanel"}
     if cfg.get("github_token"):
         headers["Authorization"] = f"Bearer {cfg['github_token']}"
     url = f"https://api.github.com/repos/{repo}/releases/latest"
@@ -119,7 +119,7 @@ async def _probe_github(cfg: dict[str, Any]) -> dict[str, Any]:
     asset_url = ""
     for asset in data.get("assets") or []:
         name = asset.get("name") or ""
-        if name.endswith(".tar.gz") and "flussonic-admin" in name:
+        if name.endswith(".tar.gz") and "amixpanel" in name:
             asset_url = asset.get("browser_download_url") or ""
             break
     if not asset_url:
@@ -151,7 +151,7 @@ async def _probe_url(cfg: dict[str, Any]) -> dict[str, Any]:
             name = cd.split("filename=", 1)[1].strip().strip('"')
         if not name:
             name = raw.rstrip("/").rsplit("/", 1)[-1]
-        version = name.replace("flussonic-admin-", "").replace(".tar.gz", "") if name else ""
+        version = name.replace("amixpanel-", "").replace(".tar.gz", "") if name else ""
         return {"version": version, "url": raw, "notes": ""}
 
 
@@ -228,14 +228,14 @@ def build_router(require_admin) -> APIRouter:
         # Spooled (uploaded) tarballs awaiting apply
         spool: list[dict[str, Any]] = []
         if SPOOL_DIR.exists():
-            for p in sorted(SPOOL_DIR.glob("flussonic-admin-*.tar.gz"), key=lambda x: x.stat().st_mtime, reverse=True):
+            for p in sorted(SPOOL_DIR.glob("amixpanel-*.tar.gz"), key=lambda x: x.stat().st_mtime, reverse=True):
                 spool.append({
                     "filename": p.name,
                     "size_bytes": p.stat().st_size,
                     "mtime": datetime.fromtimestamp(p.stat().st_mtime, tz=timezone.utc).isoformat(),
-                    "version": p.name.replace("flussonic-admin-", "").replace(".tar.gz", ""),
+                    "version": p.name.replace("amixpanel-", "").replace(".tar.gz", ""),
                 })
-        has_backup = (Path("/opt/flussonic-admin.bak")).exists()
+        has_backup = (Path("/opt/amixpanel.bak")).exists()
         return {
             "current_version": cur,
             "update_available": update_available,
@@ -317,10 +317,10 @@ def build_router(require_admin) -> APIRouter:
         if not _is_helper_available():
             raise HTTPException(status_code=503, detail=(
                 "Update helper not installed. Re-run install/install.sh on the VPS "
-                "to provision /usr/local/bin/flussonic-admin-update + sudoers."
+                "to provision /usr/local/bin/amixpanel-update + sudoers."
             ))
 
-        # Helper requires root → invoked via sudo (NOPASSWD allowed by /etc/sudoers.d/flussonic-admin)
+        # Helper requires root → invoked via sudo (NOPASSWD allowed by /etc/sudoers.d/amixpanel)
         rc, out = _safe_sub("sudo", "-n", UPDATE_HELPER, body.mode, str(tarball), timeout=1200)
         if rc != 0:
             raise HTTPException(status_code=500, detail=f"Update failed (rc={rc}):\n{out}")
